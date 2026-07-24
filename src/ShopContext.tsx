@@ -317,14 +317,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [admins, setAdmins] = useState<AdminUser[]>(() => safeParse(localStorage.getItem('ts_admins'), [defaultSuperAdmin]));
 
+  const [authToken, setAuthToken] = useState<string | null>(() => {
+    return localStorage.getItem('ts_admin_token');
+  });
+
   const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(() => safeParse(localStorage.getItem('ts_current_admin'), null));
 
   const [isAdminAuth, setIsAdminAuth] = useState<boolean>(() => {
-    return !!localStorage.getItem('ts_admin_token');
-  });
-
-  const [authToken, setAuthToken] = useState<string | null>(() => {
-    return localStorage.getItem('ts_admin_token');
+    return !!localStorage.getItem('ts_admin_token') && !!localStorage.getItem('ts_current_admin');
   });
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -385,16 +385,32 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const fetchDb = async () => {
       try {
-        const endpoint = authToken ? '/api/admin/db' : '/api/db';
-        const options: RequestInit = authToken ? {
+        let currentToken = authToken;
+        let endpoint = currentToken ? '/api/admin/db' : '/api/db';
+        let options: RequestInit = currentToken ? {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: authToken })
+          body: JSON.stringify({ token: currentToken })
         } : {
           method: 'GET'
         };
 
-        const res = await fetch(endpoint, options);
+        let res = await fetch(endpoint, options);
+        
+        if (res.status === 401 && currentToken) {
+          console.warn("Admin token invalid or expired, clearing session and retrying with public access.");
+          setAuthToken(null);
+          setCurrentAdmin(null);
+          setIsAdminAuth(false);
+          localStorage.removeItem('ts_admin_token');
+          localStorage.removeItem('ts_current_admin');
+          
+          // Retry with public endpoint
+          endpoint = '/api/db';
+          options = { method: 'GET' };
+          res = await fetch(endpoint, options);
+        }
+
         if (!res.ok) {
           throw new Error(`Server responded with ${res.status}`);
         }
@@ -554,14 +570,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [authToken]);
 
   useEffect(() => {
-    if (currentAdmin) {
+    if (currentAdmin && authToken) {
       localStorage.setItem('ts_current_admin', JSON.stringify(currentAdmin));
       setIsAdminAuth(true);
-    } else {
+    } else if (!currentAdmin || !authToken) {
       localStorage.removeItem('ts_current_admin');
       setIsAdminAuth(false);
     }
-  }, [currentAdmin]);
+  }, [currentAdmin, authToken]);
   
   useEffect(() => { 
     localStorage.setItem('ts_dark_mode', isDarkMode.toString()); 

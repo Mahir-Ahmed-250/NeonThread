@@ -529,7 +529,7 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
       const token = jwt.sign(
         { id: admin.id, email: admin.email, role: admin.role },
         JWT_SECRET,
-        { expiresIn: "7d" }
+        { expiresIn: "365d" }
       );
 
       const { password: _, ...adminWithoutPassword } = admin;
