@@ -1,0 +1,239 @@
+export interface Slide {
+  id: string;
+  title: string;
+  subtitle: string;
+  image: string;
+  tagText?: string;
+  link?: string;
+  deleted?: boolean;
+}
+
+export interface CategoryBanner {
+  id: string;
+  title: string;
+  subtitle: string;
+  image: string;
+  link: string;
+  deleted?: boolean;
+}
+
+export interface LookbookImage {
+  id: string;
+  image: string;
+  link: string;
+  className?: string; // used for grid layout
+  widthPercent?: string; // e.g. '25%', '50%', '100%'
+  heightPercent?: string; // e.g. '25%', '50%', '100%'
+  serial: number;
+  title?: string;
+  deleted?: boolean;
+}
+
+export interface Subscriber {
+  id: string;
+  email: string;
+  date: string;
+  deleted?: boolean;
+}
+
+export interface ContactMessage {
+  id: string;
+  name: string;
+  email: string;
+  message: string;
+  date: string;
+  deleted?: boolean;
+}
+
+export interface PopupAd {
+  id: string;
+  imageUrl: string;
+  linkUrl: string;
+  isActive: boolean;
+  pages: string[]; 
+  deleted?: boolean;
+}
+
+export interface HomeAd {
+  id: string;
+  imageUrl: string;
+  title?: string;
+  subtitle?: string;
+  linkUrl: string;
+  isActive: boolean;
+  deleted?: boolean;
+}
+
+export interface ProductImageVariant {
+  id: string;
+  image: string;
+  title?: string;
+  sizeStocks: { [size: string]: number };
+  stock: number;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  price: number;
+  image: string;
+  isHotSale: boolean;
+  isCollection?: boolean;
+  description: string;
+  category: string;
+  code?: string;
+  sizeChartImage?: string;
+  images?: string[]; 
+  serial?: number;
+  stock: number;
+  oldPrice?: number;
+  costPrice?: number;
+  sizePrices?: { [size: string]: number };
+  sizeStocks?: { [size: string]: number };
+  imageVariants?: ProductImageVariant[];
+  deleted?: boolean;
+}
+
+export interface Category {
+  id: string;
+  name: string;
+  slug: string;
+  deleted?: boolean;
+}
+
+export interface FAQItem {
+  id: string;
+  question: string;
+  answer: string;
+  deleted?: boolean;
+}
+
+export interface PolicyItem {
+  id: string;
+  key: 'shipping_returns' | 'privacy_policy' | string;
+  title: string;
+  content: string;
+  deleted?: boolean;
+}
+
+export interface CartItem extends Product {
+  quantity: number;
+  selectedSize?: string;
+}
+
+export interface CustomerInfo {
+  name: string;
+  phone: string;
+  email: string;
+  address: string;
+  district?: string;
+  area?: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  discountValue: number;
+  discountType: 'percentage' | 'amount';
+  isActive: boolean;
+  startDate?: string;
+  expiryDate?: string;
+  deleted?: boolean;
+}
+
+export interface Order {
+  id: string;
+  customer: CustomerInfo;
+  items: CartItem[];
+  subtotal: number;
+  discount: number;
+  shippingCharge?: number;
+  total: number;
+  couponCode?: string;
+  date: string;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  notes?: string;
+  deleted?: boolean;
+}
+
+export interface Review {
+  id: string;
+  productId: string;
+  orderId: string;
+  userName: string;
+  rating: number;
+  comment: string;
+  status: 'pending' | 'approved' | 'hidden';
+  date: string;
+  deleted?: boolean;
+}
+
+export interface AdminPermissions {
+  dashboard: boolean;
+  products: boolean;
+  orders: boolean;
+  coupons: boolean;
+  slides: boolean;
+  categoryBanners: boolean; // Renamed from categories
+  categories: boolean; // New: management of category list
+  lookbook: boolean;
+  subscribers: boolean;
+  messages: boolean;
+  ads: boolean;
+  faqs: boolean;
+  policies: boolean;
+  otps?: boolean;
+  otpsDelete?: boolean;
+  reviews?: boolean;
+  notifications?: boolean;
+}
+
+export interface OTPRecord {
+  id: string;
+  phone?: string;
+  email?: string;
+  otp: string;
+  createdAt: string;
+  verified: boolean;
+  deleted?: boolean;
+}
+
+export interface ContactInfo {
+  storeAddress: string;
+  storeAddressSubtitle: string;
+  phone: string;
+  phoneSubtitle: string;
+  email: string;
+  emailSubtitle: string;
+}
+
+export interface Announcement {
+  id: string;
+  text: string;
+  link?: string;
+  isActive: boolean;
+  isMarquee?: boolean;
+  startDate?: string;
+  endDate?: string;
+  backgroundColor?: string;
+  textColor?: string;
+  deleted?: boolean;
+}
+
+export interface SocialLink {
+  id: string;
+  platform: 'facebook' | 'instagram' | 'whatsapp' | 'tiktok' | 'youtube' | 'x';
+  url: string;
+  isActive: boolean;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  password?: string;
+  name?: string;
+  image?: string;
+  role: 'super' | 'admin';
+  permissions: AdminPermissions;
+  isActive?: boolean;
+}
