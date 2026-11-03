@@ -165,7 +165,7 @@ export default function ProductDetails() {
   }, [cartItem]);
 
   const handleAddToCart = () => {
-    if (!product || isOutOfStock || isAdded || isProductInCart) return;
+    if (!product || isOutOfStock || isAdded) return;
     const productWithSelectedImage = {
       ...product,
       image: selectedImg
@@ -512,17 +512,17 @@ export default function ProductDetails() {
             <div className="flex flex-col sm:flex-row gap-4 mb-8">
               <button 
                 type="button"
-                disabled={isOutOfStock || isAdded || isProductInCart}
+                disabled={isOutOfStock || isAdded}
                 onClick={handleAddToCart}
                 className={`flex-1 flex items-center justify-center gap-3 py-4 rounded-xl font-black uppercase tracking-widest text-xs transition-all border ${
                   isOutOfStock 
                     ? 'bg-gray-50 border-gray-100 text-gray-300 dark:bg-gray-800 dark:border-gray-700 cursor-not-allowed' 
-                    : (isAdded || isProductInCart)
+                    : isAdded
                       ? 'bg-green-600 border-green-600 text-white dark:bg-green-700 dark:border-green-700 font-bold cursor-default select-none'
                       : 'bg-white text-black border-black hover:bg-gray-50 dark:bg-gray-950 dark:text-white dark:border-gray-800 dark:hover:bg-gray-800 active:scale-95'
                 }`}
               >
-                {(isAdded || isProductInCart) ? (
+                {isAdded ? (
                   <>
                     <Check className="h-4.5 w-4.5" />
                     Added to Cart

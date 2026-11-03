@@ -76,7 +76,7 @@ const BANGLADESH_DISTRICTS = [
 ];
 
 export default function Checkout() {
-  const { cart, products, coupons, placeOrder, clearCart, updateCartQuantity, removeFromCart, updateCartItemSize } = useShop();
+  const { cart, products, coupons, placeOrder, clearCart, updateCartQuantity, updateCartQuantityById, removeFromCart, removeFromCartById, updateCartItemSize, updateCartItemSizeById } = useShop();
   const { addToast } = useToast();
   const navigate = useNavigate();
 
@@ -332,7 +332,7 @@ export default function Checkout() {
             
             <div className="space-y-4 mb-6 max-h-[220px] overflow-y-auto pr-1">
               {cart.map(item => (
-                <div key={item.id + (item.selectedSize || 'M') + (item.image || '')} className="flex gap-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800 items-center justify-between">
+                <div key={(item as any).cartItemId || (item.id + (item.selectedSize || 'M') + (item.image || ''))} className="flex gap-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800 items-center justify-between">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     <img
                       src={item.image}
@@ -349,8 +349,14 @@ export default function Checkout() {
                             <select
                               value={item.selectedSize || 'M'}
                               onChange={(e) => {
-                                updateCartItemSize(item.id, item.selectedSize || 'M', e.target.value, item.image);
-                                updateCartQuantity(item.id, 1, e.target.value, item.image);
+                                const newSize = e.target.value;
+                                if ((item as any).cartItemId) {
+                                  updateCartItemSizeById((item as any).cartItemId, newSize);
+                                  updateCartQuantityById((item as any).cartItemId, 1);
+                                } else {
+                                  updateCartItemSize(item.id, item.selectedSize || 'M', newSize, item.image);
+                                  updateCartQuantity(item.id, 1, newSize, item.image);
+                                }
                               }}
                               className="text-[9px] font-black uppercase text-gray-550 dark:text-gray-300 border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 rounded px-1 py-0.5 leading-none focus:outline-none focus:border-black dark:focus:border-white cursor-pointer"
                             >
@@ -372,7 +378,13 @@ export default function Checkout() {
                         <div className="flex items-center border border-gray-200 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900">
                           <button
                             type="button"
-                            onClick={() => updateCartQuantity(item.id, item.quantity - 1, item.selectedSize, item.image)}
+                            onClick={() => {
+                              if ((item as any).cartItemId) {
+                                updateCartQuantityById((item as any).cartItemId, item.quantity - 1);
+                              } else {
+                                updateCartQuantity(item.id, item.quantity - 1, item.selectedSize, item.image);
+                              }
+                            }}
                             className="p-1 text-gray-400 hover:text-black dark:hover:text-white focus:outline-none"
                             disabled={item.quantity <= 1}
                           >
@@ -386,7 +398,11 @@ export default function Checkout() {
                               if (item.quantity >= stock) {
                                 addToast(`Sorry, this product has a maximum of ${stock} items in stock.`, 'error');
                               } else {
-                                updateCartQuantity(item.id, item.quantity + 1, item.selectedSize, item.image);
+                                if ((item as any).cartItemId) {
+                                  updateCartQuantityById((item as any).cartItemId, item.quantity + 1);
+                                } else {
+                                  updateCartQuantity(item.id, item.quantity + 1, item.selectedSize, item.image);
+                                }
                               }
                             }}
                             className="p-1 text-gray-400 hover:text-black dark:hover:text-white focus:outline-none"
@@ -400,7 +416,13 @@ export default function Checkout() {
                   <div className="flex flex-col items-end justify-between h-10 flex-shrink-0 pl-1">
                     <button
                       type="button"
-                      onClick={() => removeFromCart(item.id, item.selectedSize, item.image)}
+                      onClick={() => {
+                        if ((item as any).cartItemId) {
+                          removeFromCartById((item as any).cartItemId);
+                        } else {
+                          removeFromCart(item.id, item.selectedSize, item.image);
+                        }
+                      }}
                       className="text-gray-400 hover:text-red-500 transition-colors"
                       title="Remove product"
                     >

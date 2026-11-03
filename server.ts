@@ -110,7 +110,7 @@ async function getMongoDb(): Promise<Db | null> {
 
 let memoryDbCache: any = null;
 let memoryCacheTimestamp = 0;
-const CACHE_TTL_MS = 60 * 1000; // 60s TTL for background auto-refresh
+const CACHE_TTL_MS = 5 * 60 * 1000; // Increased to 5 minutes for better performance
 
 async function readDb(forceFresh = false) {
   if (!forceFresh && memoryDbCache && (Date.now() - memoryCacheTimestamp < CACHE_TTL_MS)) {
@@ -123,16 +123,15 @@ async function readDb(forceFresh = false) {
       const dbObj: any = {};
       
       // Load all collections in parallel for maximum speed
-      await Promise.all(
+      // Using Promise.allSettled to ensure one failure doesn't block the whole load
+      const results = await Promise.allSettled(
         COLLECTION_KEYS.map(async (key) => {
           if (["maintenance_mode", "contactInfo", "wishlist", "comparison"].includes(key)) {
             const doc = await mongo.collection(key).findOne({ _id: "singleton" as any });
-            if (doc && doc.value !== undefined) {
-              dbObj[key] = doc.value;
-            }
+            return { key, data: doc && doc.value !== undefined ? doc.value : null };
           } else {
             const docs = await mongo.collection(key).find({}).toArray();
-            dbObj[key] = docs.map((doc: any) => {
+            const mapped = docs.map((doc: any) => {
               const item = { ...doc };
               if (doc._id && !doc.id) {
                 item.id = doc._id.toString();
@@ -140,12 +139,21 @@ async function readDb(forceFresh = false) {
               delete item._id;
               return item;
             });
+            return { key, data: mapped };
           }
         })
       );
 
-      // Check if we retrieved actual data
-      const hasData = COLLECTION_KEYS.some((key) => dbObj[key] && dbObj[key].length > 0);
+      results.forEach((res) => {
+        if (res.status === "fulfilled") {
+          dbObj[res.value.key] = res.value.data;
+        } else {
+          console.error(`Failed to load collection during readDb:`, res.reason);
+        }
+      });
+
+      // Check if we retrieved actual data (at least one collection has items)
+      const hasData = COLLECTION_KEYS.some((key) => dbObj[key] && Array.isArray(dbObj[key]) && dbObj[key].length > 0);
       
       // Cleanup specifically requested by user: remove admin@tbari.com
       if (hasData && dbObj.admins) {
@@ -166,15 +174,21 @@ async function readDb(forceFresh = false) {
         return dbObj;
       } else {
         // Automatically migrate server-side local storage db.json to individual MongoDB collections
-        console.log("MongoDB is connected but collections are empty. Migrating local db.json data...");
+        // Only if MongoDB is truly empty (no data in any expected collection)
+        console.log("MongoDB is connected but collections are empty. Checking migration from local db.json...");
         const fileDb = await readDbFromFileOnly();
-        if (fileDb && Object.keys(fileDb).length > 0) {
+        const hasFileData = fileDb && COLLECTION_KEYS.some(key => fileDb[key] && Array.isArray(fileDb[key]) && fileDb[key].length > 0);
+        
+        if (hasFileData) {
+          console.log("Migrating local db.json data to MongoDB...");
           await writeDb(fileDb);
           memoryDbCache = fileDb;
           memoryCacheTimestamp = Date.now();
           return fileDb;
         }
       }
+      
+      // Fallback: If we have some keys but no "hasData", return what we got
       memoryDbCache = dbObj;
       memoryCacheTimestamp = Date.now();
       return dbObj;
@@ -285,7 +299,13 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
         }
 
         // 3. Identify and add delete operations for missing documents
-        const idsToDelete = existingIds.filter(id => !newDocIds.has(id));
+        // Safeguard: Do not perform bulk deletes if the incoming data is empty 
+        // unless it's a small collection or explicitly allowed.
+        // This prevents accidental wipes of large collections due to client-side bugs.
+        const idsToDelete = (array.length === 0 && existingIds.length > 5) 
+          ? [] 
+          : existingIds.filter(id => !newDocIds.has(id));
+        
         if (idsToDelete.length > 0) {
           bulkOps.push({
             deleteMany: {
@@ -489,6 +509,25 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     } catch (err) {
       console.error("Meta injection error:", err);
       next();
+    }
+  });
+
+  app.get("/api/products", async (req, res) => {
+    try {
+      const db = await readDb();
+      if (!db || !db.products) return res.json([]);
+      
+      // Sanitize products to remove cost prices from public fetch
+      const sanitizedProducts = db.products.map((product: any) => {
+        const { costPrice, ...rest } = product;
+        return rest;
+      });
+
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=120");
+      res.json(sanitizedProducts);
+    } catch (err: any) {
+      console.error("Error in GET /api/products:", err);
+      res.status(500).json({ error: err.message });
     }
   });
 

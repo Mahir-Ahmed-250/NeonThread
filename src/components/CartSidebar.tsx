@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from './Toast';
 
 export default function CartSidebar() {
-  const { cart, products, removeFromCart, updateCartQuantity, updateCartItemSize, isCartOpen, setIsCartOpen, clearCart } = useShop();
+  const { cart, products, removeFromCart, removeFromCartById, updateCartQuantity, updateCartQuantityById, updateCartItemSize, updateCartItemSizeById, isCartOpen, setIsCartOpen, clearCart } = useShop();
   const navigate = useNavigate();
   const { addToast } = useToast();
 
@@ -75,7 +75,7 @@ export default function CartSidebar() {
               ) : (
                 <ul className="space-y-3">
                   {cart.map(item => (
-                    <li key={item.id + (item.selectedSize || 'M') + (item.image || '')} className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-3">
+                    <li key={(item as any).cartItemId || (item.id + (item.selectedSize || 'M') + (item.image || ''))} className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-3">
                       <img
                         src={item.image}
                         alt={item.name}
@@ -85,7 +85,13 @@ export default function CartSidebar() {
                         <div className="flex justify-between items-start mb-0.5">
                           <h3 className="font-bold text-[11px] line-clamp-1 dark:text-white uppercase truncate pr-2">{item.name}</h3>
                           <button
-                            onClick={() => removeFromCart(item.id, item.selectedSize, item.image)}
+                            onClick={() => {
+                              if ((item as any).cartItemId) {
+                                removeFromCartById((item as any).cartItemId);
+                              } else {
+                                removeFromCart(item.id, item.selectedSize, item.image);
+                              }
+                            }}
                             className="text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
                           >
                             <Trash2 className="h-3.5 w-3.5" />
@@ -98,8 +104,13 @@ export default function CartSidebar() {
                                 value={item.selectedSize || 'M'}
                                 onChange={(e) => {
                                   const newSize = e.target.value;
-                                  updateCartItemSize(item.id, item.selectedSize || 'M', newSize, item.image);
-                                  updateCartQuantity(item.id, 1, newSize, item.image);
+                                  if ((item as any).cartItemId) {
+                                    updateCartItemSizeById((item as any).cartItemId, newSize);
+                                    updateCartQuantityById((item as any).cartItemId, 1);
+                                  } else {
+                                    updateCartItemSize(item.id, item.selectedSize || 'M', newSize, item.image);
+                                    updateCartQuantity(item.id, 1, newSize, item.image);
+                                  }
                                   
                                   const product = products.find(p => p.id === item.id);
                                   const stock = product ? (product.sizeStocks ? product.sizeStocks[newSize] : product.stock) : 0;
@@ -129,7 +140,13 @@ export default function CartSidebar() {
                         <div className="flex items-center gap-3 mt-auto">
                            <div className="flex items-center border border-gray-100 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-900/50">
                             <button
-                              onClick={() => updateCartQuantity(item.id, item.quantity - 1, item.selectedSize, item.image)}
+                              onClick={() => {
+                                if ((item as any).cartItemId) {
+                                  updateCartQuantityById((item as any).cartItemId, item.quantity - 1);
+                                } else {
+                                  updateCartQuantity(item.id, item.quantity - 1, item.selectedSize, item.image);
+                                }
+                              }}
                               className="p-1 px-1.5 text-gray-500 hover:text-black dark:hover:text-white focus:outline-none"
                               disabled={item.quantity <= 1}
                             >
@@ -143,7 +160,11 @@ export default function CartSidebar() {
                                 if (item.quantity >= (stock || 0)) {
                                   addToast(`দুঃখিত, এই প্রোডাক্টটি সর্বোচ্চ ${stock} টি স্টকে আছে।`, 'error');
                                 } else {
-                                  updateCartQuantity(item.id, item.quantity + 1, item.selectedSize, item.image);
+                                  if ((item as any).cartItemId) {
+                                    updateCartQuantityById((item as any).cartItemId, item.quantity + 1);
+                                  } else {
+                                    updateCartQuantity(item.id, item.quantity + 1, item.selectedSize, item.image);
+                                  }
                                 }
                               }}
                               className="p-1 px-1.5 text-gray-500 hover:text-black dark:hover:text-white focus:outline-none"

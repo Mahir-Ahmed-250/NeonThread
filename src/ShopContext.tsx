@@ -28,8 +28,11 @@ interface ShopContextType {
   getProductStockForSize: (product: Product, size: string, image?: string) => number;
   addToCart: (product: Product, quantity?: number, selectedSize?: string) => void;
   removeFromCart: (productId: string, selectedSize?: string, image?: string) => void;
+  removeFromCartById: (cartItemId: string) => void;
   updateCartQuantity: (productId: string, quantity: number, selectedSize?: string, image?: string) => void;
+  updateCartQuantityById: (cartItemId: string, quantity: number) => void;
   updateCartItemSize: (productId: string, oldSize: string, newSize: string, image?: string) => void;
+  updateCartItemSizeById: (cartItemId: string, newSize: string) => void;
   clearCart: () => void;
   placeOrder: (customer: CustomerInfo, couponCode?: string) => { success: boolean; orderId?: string; error?: string };
   // Admin actions
@@ -386,7 +389,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const fetchDb = async () => {
       try {
         let currentToken = authToken;
-        let endpoint = currentToken ? '/api/admin/db' : '/api/db';
+        let endpoint = currentToken ? '/api/admin/db' : '/api/products';
         let options: RequestInit = currentToken ? {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -405,8 +408,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem('ts_admin_token');
           localStorage.removeItem('ts_current_admin');
           
-          // Retry with public endpoint
-          endpoint = '/api/db';
+          // Retry with public products endpoint
+          endpoint = '/api/products';
           options = { method: 'GET' };
           res = await fetch(endpoint, options);
         }
@@ -416,31 +419,76 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         const dbData = await res.json();
         
-        if (dbData && Object.keys(dbData).length > 0) {
-          if (dbData.products) {
-            setProducts(dbData.products.map((p: any) => ({
-              ...p,
-              stock: p.stock !== undefined ? p.stock : 0
-            })));
+        // Handle both full DB object (admin) and products array (public)
+        let normalizedDbData: any = {};
+        if (Array.isArray(dbData)) {
+          normalizedDbData = { products: dbData };
+        } else {
+          normalizedDbData = dbData;
+        }
+
+        if (normalizedDbData && Object.keys(normalizedDbData).length > 0) {
+          // Robustness: Only overwrite if the server returned actual items for major collections
+          // or if we were explicitly performing an admin load.
+          const hasSignificantData = COLLECTION_KEYS.some(key => 
+            normalizedDbData[key] && Array.isArray(normalizedDbData[key]) && normalizedDbData[key].length > 0
+          );
+
+          if (hasSignificantData) {
+            if (normalizedDbData.products) {
+              setProducts(normalizedDbData.products.map((p: any) => ({
+                ...p,
+                stock: p.stock !== undefined ? p.stock : 0
+              })));
+            }
+            if (normalizedDbData.faqs) setFaqs(normalizedDbData.faqs);
+            if (normalizedDbData.policies) setPolicies(normalizedDbData.policies);
+            if (normalizedDbData.categories) setCategories(normalizedDbData.categories);
+            if (normalizedDbData.orders) setOrders(normalizedDbData.orders);
+            if (normalizedDbData.coupons) setCoupons(normalizedDbData.coupons);
+            if (normalizedDbData.slides) setSlides(normalizedDbData.slides);
+            if (normalizedDbData.categoryBanners) setCategoryBanners(normalizedDbData.categoryBanners);
+            if (normalizedDbData.lookbook) setLookbook(normalizedDbData.lookbook);
+            if (normalizedDbData.subscribers) setSubscribers(normalizedDbData.subscribers);
+            if (normalizedDbData.contactMessages) setContactMessages(normalizedDbData.contactMessages);
+            if (normalizedDbData.popupAds) setPopupAds(normalizedDbData.popupAds);
+            if (normalizedDbData.homeAds) setHomeAds(normalizedDbData.homeAds);
+            if (normalizedDbData.admins) setAdmins(normalizedDbData.admins);
+            if (normalizedDbData.otps) setOtps(normalizedDbData.otps);
+            if (normalizedDbData.announcements) setAnnouncements(normalizedDbData.announcements);
+            if (normalizedDbData.socialLinks) setSocialLinks(normalizedDbData.socialLinks);
+            if (normalizedDbData.comparison) setComparisonItems(normalizedDbData.comparison);
+            if (normalizedDbData.maintenance_mode !== undefined) setIsMaintenanceMode(normalizedDbData.maintenance_mode);
+          } else if (products.length > 0 || (currentToken && admins.length > 1)) {
+             // Server is empty but client has data -> Initialize server
+             console.log("Server is empty but client has local data. Syncing to server...");
+             const initialDb = {
+               products,
+               faqs,
+               policies,
+               categories,
+               orders,
+               coupons,
+               slides,
+               categoryBanners,
+               lookbook,
+               subscribers,
+               contactMessages,
+               popupAds,
+               homeAds,
+               admins,
+               otps,
+               announcements,
+               socialLinks,
+               comparison: comparisonItems,
+               maintenance_mode: isMaintenanceMode
+             };
+             await fetch('/api/db/init', {
+               method: 'POST',
+               headers: { 'Content-Type': 'application/json' },
+               body: JSON.stringify(initialDb)
+             });
           }
-          if (dbData.faqs) setFaqs(dbData.faqs);
-          if (dbData.policies) setPolicies(dbData.policies);
-          if (dbData.categories) setCategories(dbData.categories);
-          if (dbData.orders) setOrders(dbData.orders);
-          if (dbData.coupons) setCoupons(dbData.coupons);
-          if (dbData.slides) setSlides(dbData.slides);
-          if (dbData.categoryBanners) setCategoryBanners(dbData.categoryBanners);
-          if (dbData.lookbook) setLookbook(dbData.lookbook);
-          if (dbData.subscribers) setSubscribers(dbData.subscribers);
-          if (dbData.contactMessages) setContactMessages(dbData.contactMessages);
-          if (dbData.popupAds) setPopupAds(dbData.popupAds);
-          if (dbData.homeAds) setHomeAds(dbData.homeAds);
-          if (dbData.admins) setAdmins(dbData.admins);
-          if (dbData.otps) setOtps(dbData.otps);
-          if (dbData.announcements) setAnnouncements(dbData.announcements);
-          if (dbData.socialLinks) setSocialLinks(dbData.socialLinks);
-          if (dbData.comparison) setComparisonItems(dbData.comparison);
-          if (dbData.maintenance_mode !== undefined) setIsMaintenanceMode(dbData.maintenance_mode);
         } else {
           // Initialize server with local storage values or default mocks
           const initialDb = {
@@ -797,34 +845,41 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const size = selectedSize || 'M';
     const priceForSize = getProductPriceForSize(product, size);
     const itemImage = product.image || '';
+    
+    // User requested that same product added multiple times should appear as separate lines in checkout
+    // So we generate a unique ID for each "add" event.
+    const cartItemId = `${product.id}-${size}-${itemImage.substring(itemImage.length - 10)}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id && (item.selectedSize || 'M') === size && (item.image || '') === itemImage);
-      const currentQty = existing ? existing.quantity : 0;
-      const totalRequested = currentQty + quantity;
+      // If we wanted to merge, we would find existing here. 
+      // But the user explicitly said "একাধিকবার ই চেক আউটে এড হবে" (Added multiple times).
+      // However, we still need to check stock.
+      const existingItems = prev.filter(item => item.id === product.id && (item.selectedSize || 'M') === size && (item.image || '') === itemImage);
+      const currentQtyInCart = existingItems.reduce((sum, item) => sum + item.quantity, 0);
+      const totalRequested = currentQtyInCart + quantity;
       
-      // Size & Variant-Specific Stock check
       const stock = getProductStockForSize(product, size, itemImage);
       if (totalRequested > stock) {
-        // If we can't fulfill the full request, just add up to stock
-        const allowedAdd = Math.max(0, stock - currentQty);
-        if (allowedAdd <= 0) return prev;
-        
-        if (existing) {
-          return prev.map(item => (item.id === product.id && (item.selectedSize || 'M') === size && (item.image || '') === itemImage) ? { ...item, quantity: stock, price: priceForSize } : item);
+        const allowedAdd = Math.max(0, stock - currentQtyInCart);
+        if (allowedAdd <= 0) {
+          // If already at max stock, don't add anything more
+          return prev;
         }
-        return [...prev, { ...product, price: priceForSize, quantity: stock, selectedSize: size, image: itemImage }];
+        // Add up to stock
+        return [...prev, { ...product, price: priceForSize, quantity: allowedAdd, selectedSize: size, image: itemImage, cartItemId }];
       }
 
-      if (existing) {
-        return prev.map(item => (item.id === product.id && (item.selectedSize || 'M') === size && (item.image || '') === itemImage) ? { ...item, quantity: item.quantity + quantity, price: priceForSize } : item);
-      }
-      return [...prev, { ...product, price: priceForSize, quantity, selectedSize: size, image: itemImage }];
+      return [...prev, { ...product, price: priceForSize, quantity, selectedSize: size, image: itemImage, cartItemId }];
     });
   };
 
   const removeFromCart = (productId: string, selectedSize?: string, image?: string) => {
-    const size = selectedSize || 'M';
-    setCart(prev => prev.filter(item => !(item.id === productId && (item.selectedSize || 'M') === size && (image === undefined || (item.image || '') === image))));
+    // If we have cartItemId, we should use it. But for backward compatibility with existing calls:
+    setCart(prev => prev.filter(item => !(item.id === productId && (item.selectedSize || 'M') === (selectedSize || 'M') && (image === undefined || (item.image || '') === image))));
+  };
+
+  const removeFromCartById = (cartItemId: string) => {
+    setCart(prev => prev.filter(item => (item as any).cartItemId !== cartItemId));
   };
 
   const updateCartQuantity = (productId: string, quantity: number, selectedSize?: string, image?: string) => {
@@ -835,6 +890,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const itemImg = item.image || image || '';
         const stock = getProductStockForSize(item, size, itemImg);
         const priceForSize = getProductPriceForSize(item, size);
+        return { ...item, quantity: Math.min(quantity, stock), price: priceForSize };
+      }
+      return item;
+    }));
+  };
+
+  const updateCartQuantityById = (cartItemId: string, quantity: number) => {
+    if (quantity < 1) return;
+    setCart(prev => prev.map(item => {
+      if ((item as any).cartItemId === cartItemId) {
+        const stock = getProductStockForSize(item, item.selectedSize || 'M', item.image || '');
+        const priceForSize = getProductPriceForSize(item, item.selectedSize || 'M');
         return { ...item, quantity: Math.min(quantity, stock), price: priceForSize };
       }
       return item;
@@ -878,6 +945,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     });
+  };
+
+  const updateCartItemSizeById = (cartItemId: string, newSize: string) => {
+    setCart(prev => prev.map(item => {
+      if ((item as any).cartItemId === cartItemId) {
+        const priceNew = getProductPriceForSize(item, newSize);
+        return { ...item, selectedSize: newSize, price: priceNew };
+      }
+      return item;
+    }));
   };
 
   const clearCart = () => setCart([]);
@@ -1323,7 +1400,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMaintenanceMode: setIsMaintenanceMode,
       getProductPriceForSize,
       getProductStockForSize,
-      addToCart, removeFromCart, updateCartQuantity, updateCartItemSize, clearCart, placeOrder,
+      addToCart, removeFromCart, removeFromCartById, updateCartQuantity, updateCartQuantityById, updateCartItemSize, updateCartItemSizeById, clearCart, placeOrder,
       loginAdmin, logoutAdmin, updateProfile, addAdmin, updateAdmin, deleteAdmin, updateContactInfo, addProduct, updateProduct, deleteProduct,
       addSlide, updateSlide, deleteSlide, addCategoryBanner, updateCategoryBanner, deleteCategoryBanner, 
       addCategory, updateCategory, deleteCategory,
