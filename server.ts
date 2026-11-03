@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import path from "path";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
@@ -107,7 +108,15 @@ async function getMongoDb(): Promise<Db | null> {
   return mongoDb;
 }
 
-async function readDb() {
+let memoryDbCache: any = null;
+let memoryCacheTimestamp = 0;
+const CACHE_TTL_MS = 60 * 1000; // 60s TTL for background auto-refresh
+
+async function readDb(forceFresh = false) {
+  if (!forceFresh && memoryDbCache && (Date.now() - memoryCacheTimestamp < CACHE_TTL_MS)) {
+    return memoryDbCache;
+  }
+
   const mongo = await getMongoDb();
   if (mongo) {
     try {
@@ -152,6 +161,8 @@ async function readDb() {
       }
 
       if (hasData) {
+        memoryDbCache = dbObj;
+        memoryCacheTimestamp = Date.now();
         return dbObj;
       } else {
         // Automatically migrate server-side local storage db.json to individual MongoDB collections
@@ -159,16 +170,25 @@ async function readDb() {
         const fileDb = await readDbFromFileOnly();
         if (fileDb && Object.keys(fileDb).length > 0) {
           await writeDb(fileDb);
+          memoryDbCache = fileDb;
+          memoryCacheTimestamp = Date.now();
           return fileDb;
         }
       }
+      memoryDbCache = dbObj;
+      memoryCacheTimestamp = Date.now();
       return dbObj;
     } catch (err) {
       console.error("Error reading from MongoDB individual collections, falling back to local file:", err);
     }
   }
 
-  return readDbFromFileOnly();
+  const fileDb = await readDbFromFileOnly();
+  if (fileDb) {
+    memoryDbCache = fileDb;
+    memoryCacheTimestamp = Date.now();
+  }
+  return fileDb;
 }
 
 async function readDbFromFileOnly() {
@@ -181,6 +201,9 @@ async function readDbFromFileOnly() {
 }
 
 async function writeDb(db: any) {
+  memoryDbCache = { ...db };
+  memoryCacheTimestamp = Date.now();
+
   const mongo = await getMongoDb();
   if (mongo) {
     try {
@@ -212,6 +235,12 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
   const currentPromise = writeLocks[key] || Promise.resolve();
   
   const nextPromise = currentPromise.then(async () => {
+    // Immediately update memory cache for zero-latency consistency
+    if (memoryDbCache) {
+      memoryDbCache[key] = data;
+      memoryCacheTimestamp = Date.now();
+    }
+
     const mongo = await getMongoDb();
     if (mongo) {
       try {
@@ -342,6 +371,7 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
 
   // IMPORTANT: Trust the first proxy (required for accurate rate limiting in our cloud environment)
   app.set("trust proxy", 1);
+  app.use(compression());
 
   // Security Hardening: Apply Helmet for secure headers and Rate Limiting
   app.use(helmet({
@@ -464,23 +494,27 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
 
   app.get("/api/db", async (req, res) => {
     try {
-      const db = await readDb();
+      const rawDb = await readDb();
+      if (!rawDb) return res.json({});
+      
+      // Clone so we don't mutate memory cache directly
+      const db: any = { ...rawDb };
       // SECURITY: Sanitize admins to remove passwords and products to remove cost prices from general fetch
-      if (db) {
-        if (db.admins) {
-          db.admins = db.admins.map((admin: any) => {
-            const { password, ...rest } = admin;
-            return rest;
-          });
-        }
-        if (db.products) {
-          db.products = db.products.map((product: any) => {
-            const { costPrice, ...rest } = product;
-            return rest;
-          });
-        }
+      if (db.admins) {
+        db.admins = db.admins.map((admin: any) => {
+          const { password, ...rest } = admin;
+          return rest;
+        });
       }
-      res.json(db || {});
+      if (db.products) {
+        db.products = db.products.map((product: any) => {
+          const { costPrice, ...rest } = product;
+          return rest;
+        });
+      }
+
+      res.setHeader("Cache-Control", "public, max-age=10, stale-while-revalidate=30");
+      res.json(db);
     } catch (err: any) {
       console.error("Error in GET /api/db:", err);
       res.status(500).json({ error: err.message });
