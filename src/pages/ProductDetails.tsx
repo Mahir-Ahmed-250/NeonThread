@@ -149,19 +149,29 @@ export default function ProductDetails() {
 
   const handleAddToCart = () => {
     if (!product || isOutOfStock || isAdded || isProductInCart) return;
-    addToCart(product, quantity, selectedSize);
+    const selectedImg = galleryImages[activeImageIndex] || product.image;
+    const productWithSelectedImage = {
+      ...product,
+      image: selectedImg
+    };
+    addToCart(productWithSelectedImage, quantity, selectedSize);
     setIsAdded(true);
     setTimeout(() => setIsAdded(false), 2000);
   };
 
   const handleBuyNow = () => {
     if (isOutOfStock) return;
+    const selectedImg = galleryImages[activeImageIndex] || product.image;
+    const productWithSelectedImage = {
+      ...product,
+      image: selectedImg
+    };
     if (isProductInCart) {
       // If the product is already in the cart, do not add the quantity again to prevent duplicating/doubling.
       // Simply ensure the quantity matches the current selection and navigate to checkout.
       updateCartQuantity(product.id, quantity, selectedSize);
     } else {
-      addToCart(product, quantity, selectedSize);
+      addToCart(productWithSelectedImage, quantity, selectedSize);
     }
     navigate('/checkout');
   };
@@ -252,7 +262,7 @@ export default function ProductDetails() {
                   }}
                   src={galleryImages[activeImageIndex]} 
                   alt={product.name} 
-                  className="w-full h-full object-cover object-center absolute inset-0 pointer-events-none"
+                  className="w-full h-full object-contain object-center absolute inset-0 pointer-events-none"
                   referrerPolicy="no-referrer"
                 />
               </AnimatePresence>

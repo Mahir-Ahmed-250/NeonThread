@@ -757,8 +757,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const getProductStockForSize = (product: Product, size: string): number => {
-    if (product?.sizeStocks && product.sizeStocks[size] !== undefined) {
-      return product.sizeStocks[size];
+    if (product?.sizeStocks && Object.keys(product.sizeStocks).length > 0) {
+      return product.sizeStocks[size] !== undefined ? product.sizeStocks[size] : 0;
     }
     return product ? (product.stock !== undefined ? product.stock : 0) : 0;
   };
