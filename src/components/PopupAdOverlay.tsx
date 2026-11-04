@@ -3,7 +3,6 @@ import { useLocation } from 'react-router-dom';
 import { useShop } from '../ShopContext';
 import { X } from 'lucide-react';
 import { PopupAd } from '../types';
-import { ImageWithSkeleton } from './ImageWithSkeleton';
 
 export default function PopupAdOverlay() {
   const { popupAds } = useShop();
@@ -63,10 +62,10 @@ export default function PopupAdOverlay() {
         </button>
         {activeAd.linkUrl ? (
           <a href={activeAd.linkUrl} onClick={handleClose} target="_blank" rel="noopener noreferrer">
-            <ImageWithSkeleton src={activeAd.imageUrl} alt="Advertisement" className="w-full h-auto max-h-[70vh] object-cover" />
+            <img src={activeAd.imageUrl} alt="Advertisement" className="w-full h-auto max-h-[70vh] object-cover" />
           </a>
         ) : (
-          <ImageWithSkeleton src={activeAd.imageUrl} alt="Advertisement" className="w-full h-auto max-h-[70vh] object-cover" />
+          <img src={activeAd.imageUrl} alt="Advertisement" className="w-full h-auto max-h-[70vh] object-cover" />
         )}
       </div>
     </div>

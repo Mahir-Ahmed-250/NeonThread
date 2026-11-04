@@ -4,9 +4,8 @@ import { Link } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, ShieldCheck, Truck, RotateCcw } from 'lucide-react';
 import { useShop } from '../ShopContext';
 import ProductCard from '../components/ProductCard';
-import { Skeleton, ProductCardSkeleton } from '../components/Skeleton';
+import { ProductCardSkeleton } from '../components/Skeleton';
 import Swal from 'sweetalert2';
-import { ImageWithSkeleton } from '../components/ImageWithSkeleton';
 
 export default function Home() {
   const { products, slides, categoryBanners, lookbook, homeAds, addSubscriber } = useShop();
@@ -51,91 +50,85 @@ export default function Home() {
       {/* Hero Carousel */}
       <div className="px-4 sm:px-6 lg:px-8 pt-6 max-w-screen-2xl mx-auto w-full">
         <div className="relative h-[45vh] sm:h-[60vh] w-full overflow-hidden bg-gray-900 rounded-3xl group">
-          {slides.length === 0 ? (
-            <Skeleton className="w-full h-full rounded-3xl" />
-          ) : (
-            <AnimatePresence initial={false}>
-              {slides.map((slide, index) => (
-                index === currentSlide && (
-                  <motion.div
-                    key={slide.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.8 }}
-                    className="absolute inset-0"
+        <AnimatePresence initial={false}>
+          {slides.map((slide, index) => (
+            index === currentSlide && (
+              <motion.div
+                key={slide.id}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.8 }}
+                className="absolute inset-0"
+              >
+                <div className="absolute inset-0 bg-black/40 z-10" />
+                {slide.image ? (
+                  <img
+                    src={slide.image}
+                    alt={slide.title}
+                    loading={index === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                    fetchPriority={index === 0 ? "high" : "auto"}
+                    className="w-full h-full object-cover object-center"
+                  />
+                ) : null}
+                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
+                  <motion.span
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.1, duration: 0.8 }}
+                    className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-full mb-6"
                   >
-                    <div className="absolute inset-0 bg-black/40 z-10" />
-                    {slide.image ? (
-                      <ImageWithSkeleton
-                        src={slide.image}
-                        alt={slide.title}
-                        loading={index === 0 ? "eager" : "lazy"}
-                        className="w-full h-full object-cover object-center"
-                      />
-                    ) : null}
-                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
-                      <motion.span
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.1, duration: 0.8 }}
-                        className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-full mb-6"
-                      >
-                        {slide.tagText || 'Featured'}
-                      </motion.span>
-                      <motion.h1
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.2, duration: 0.8 }}
-                        className="text-2xl sm:text-5xl md:text-7xl font-black text-white leading-none mb-3 sm:mb-4 uppercase"
-                      >
-                        {slide.title}
-                      </motion.h1>
-                      <motion.p
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.4, duration: 0.8 }}
-                        className="text-xs sm:text-base md:text-lg text-gray-200 mb-6 sm:mb-8 max-w-2xl font-medium"
-                      >
-                        {slide.subtitle}
-                      </motion.p>
-                      <motion.div
-                        initial={{ y: 20, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        transition={{ delay: 0.6, duration: 0.8 }}
-                      >
-                        <Link
-                          to={slide.link || "/shop"}
-                          className="px-8 py-4 bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-gray-200 rounded-xl transition-all shadow-xl"
-                        >
-                          Shop Now
-                        </Link>
-                      </motion.div>
-                    </div>
+                    {slide.tagText || 'Featured'}
+                  </motion.span>
+                  <motion.h1
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.2, duration: 0.8 }}
+                    className="text-2xl sm:text-5xl md:text-7xl font-black text-white leading-none mb-3 sm:mb-4 uppercase"
+                  >
+                    {slide.title}
+                  </motion.h1>
+                  <motion.p
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.4, duration: 0.8 }}
+                    className="text-xs sm:text-base md:text-lg text-gray-200 mb-6 sm:mb-8 max-w-2xl font-medium"
+                  >
+                    {slide.subtitle}
+                  </motion.p>
+                  <motion.div
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    transition={{ delay: 0.6, duration: 0.8 }}
+                  >
+                    <Link
+                      to={slide.link || "/shop"}
+                      className="px-8 py-4 bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-gray-200 rounded-xl transition-all shadow-xl"
+                    >
+                      Shop Now
+                    </Link>
                   </motion.div>
-                )
-              ))}
-            </AnimatePresence>
-          )}
-          
-          {/* Controls */}
-          {slides.length > 0 && (
-            <>
-              <button
-                onClick={prevSlide}
-                className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm transition-all"
-              >
-                <ChevronLeft className="h-6 w-6" />
-              </button>
-              <button
-                onClick={nextSlide}
-                className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm transition-all"
-              >
-                <ChevronRight className="h-6 w-6" />
-              </button>
-            </>
-          )}
-        </div>
+                </div>
+              </motion.div>
+            )
+          ))}
+        </AnimatePresence>
+        
+        {/* Controls */}
+        <button
+          onClick={prevSlide}
+          className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm transition-all"
+        >
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+        <button
+          onClick={nextSlide}
+          className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm transition-all"
+        >
+          <ChevronRight className="h-6 w-6" />
+        </button>
+      </div>
       </div>
 
       {/* Hot Sales Section */}
@@ -182,9 +175,11 @@ export default function Home() {
           {categoryBanners.map(banner => (
             <div key={banner.id} className="relative h-64 md:h-80 rounded-3xl overflow-hidden group">
               {banner.image ? (
-                <ImageWithSkeleton 
+                <img 
                   src={banner.image} 
                   alt={banner.title} 
+                  loading="lazy" 
+                  decoding="async" 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                 />
               ) : null}
@@ -254,10 +249,11 @@ export default function Home() {
                 className="relative block h-56 sm:h-64 rounded-3xl overflow-hidden group shadow-sm hover:shadow-lg transition-all duration-300 transform"
               >
                 {ad.imageUrl ? (
-                  <ImageWithSkeleton
+                  <img 
                     src={ad.imageUrl} 
                     alt={ad.title || "Advertisement"} 
                     className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                    referrerPolicy="no-referrer"
                   />
                 ) : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
@@ -309,9 +305,11 @@ export default function Home() {
                   className={`relative rounded-3xl overflow-hidden group ${lb.className || ''}`}
                 >
                   {lb.image ? (
-                    <ImageWithSkeleton 
+                    <img 
                       src={lb.image} 
                       alt={lb.title || "Lookbook"} 
+                      loading="lazy" 
+                      decoding="async" 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                     />
                   ) : null}

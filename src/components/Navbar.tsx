@@ -4,7 +4,6 @@ import { ShoppingCart, Menu, X, Search, ChevronRight, Moon, Sun, UserCog, Heart 
 import { useShop } from '../ShopContext';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { ImageWithSkeleton } from './ImageWithSkeleton';
 
 export default function Navbar() {
   const { cart, products, isDarkMode, toggleDarkMode, setIsCartOpen, isAdminAuth, wishlist } = useShop();
@@ -217,7 +216,7 @@ export default function Navbar() {
                                   onClick={() => handleProductClick(p.id)}
                                   className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
                                 >
-                                  <ImageWithSkeleton src={p.image} alt={p.name} className="w-10 h-10 rounded object-cover bg-gray-100 dark:bg-gray-800 mr-3" />
+                                  <img src={p.image} alt={p.name} className="w-10 h-10 rounded object-cover bg-gray-100 dark:bg-gray-800 mr-3" />
                                   <div className="flex-1">
                                     <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{p.name}</h4>
                                     <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">৳{p.price}</p>
@@ -377,7 +376,7 @@ export default function Navbar() {
                                   onClick={() => handleProductClick(p.id)}
                                   className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
                                 >
-                                  <ImageWithSkeleton src={p.image} alt={p.name} className="w-8 h-8 rounded object-cover bg-gray-100 mr-3" />
+                                  <img src={p.image} alt={p.name} className="w-8 h-8 rounded object-cover bg-gray-100 mr-3" />
                                   <div className="flex-1 min-w-0">
                                     <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{p.name}</h4>
                                     <p className="text-[10px] text-gray-500 dark:text-gray-400">৳{p.price}</p>

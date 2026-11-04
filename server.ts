@@ -1095,58 +1095,12 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
   });
 
   const distPath = path.join(process.cwd(), "dist");
+  app.use(express.static(distPath));
   
-  // Static files middleware - Serve assets from dist folder
-  app.use('/assets', express.static(path.join(distPath, 'assets'), {
-    maxAge: '1d',
-    etag: true,
-    setHeaders: (res, path) => {
-      if (path.endsWith('.js') || path.endsWith('.mjs')) {
-        res.setHeader('Content-Type', 'application/javascript');
-      } else if (path.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css');
-      }
-    }
-  }));
-
-  app.use(express.static(distPath, {
-    maxAge: '1d',
-    etag: true,
-    setHeaders: (res, path) => {
-      if (path.endsWith('.js') || path.endsWith('.mjs')) {
-        res.setHeader('Content-Type', 'application/javascript');
-      } else if (path.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css');
-      }
-    }
-  }));
-
-  // Vite middleware for development
-  app.use((req, res, next) => {
-    if (viteInstance) {
-      viteInstance.middlewares(req, res, next);
-    } else if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-      const checkVite = setInterval(() => {
-        if (viteInstance) {
-          clearInterval(checkVite);
-          viteInstance.middlewares(req, res, next);
-        }
-      }, 50);
-    } else {
-      next();
-    }
-  });
-
   app.get("*", async (req, res, next) => {
     // If it's an API route that wasn't matched, it's a 404
     if (req.path.startsWith("/api/")) {
       return res.status(404).json({ error: "API route not found" });
-    }
-
-    // Guard: Do NOT serve index.html for missing static assets (files with extensions)
-    // This prevents MIME type errors (returning HTML when JS/CSS is expected)
-    if (req.path.includes('.') && !req.path.endsWith('.html')) {
-      return res.status(404).send("Not found");
     }
 
     try {
@@ -1154,23 +1108,11 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
         const indexPath = path.join(process.cwd(), "index.html");
         let template = await fs.readFile(indexPath, "utf-8");
         template = await viteInstance.transformIndexHtml(req.originalUrl, template);
-        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         return res.status(200).set({ "Content-Type": "text/html" }).send(template);
+      } else if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+        return res.send("Loading Vite dev server...");
       } else {
-        const indexPath = path.join(distPath, "index.html");
-        try {
-          await fs.access(indexPath);
-          res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-          return res.sendFile(indexPath);
-        } catch (e) {
-          // Fallback if dist/index.html is missing
-          if (process.env.NODE_ENV !== "production") {
-             const rootIndexPath = path.join(process.cwd(), "index.html");
-             res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-             return res.sendFile(rootIndexPath);
-          }
-          return res.status(404).send("Frontend not built");
-        }
+        return res.sendFile(path.join(distPath, "index.html"));
       }
     } catch (err) {
       next(err);
