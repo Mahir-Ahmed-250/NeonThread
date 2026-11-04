@@ -104,7 +104,6 @@ export default function App() {
         <ShopProvider>
           <LoadingBar />
           <ScrollToTop />
-          <PageLoader />
           <PopupAdOverlay />
           <AnimatedRoutes />
         </ShopProvider>

@@ -372,8 +372,8 @@ export default function Home() {
                className="py-4 md:py-0 px-6 flex flex-col items-center"
             >
               <RotateCcw className="h-10 w-10 text-gray-900 mb-4" />
-              <h3 className="text-xl font-bold mb-2">Easy Returns</h3>
-              <p className="text-gray-500 text-sm">7-day hassle-free return policy if you change your mind.</p>
+              <h3 className="text-xl font-bold mb-2">Cash On Delivery</h3>
+              <p className="text-gray-500 text-sm">Hassle-free Cash On Delivery</p>
             </motion.div>
           </div>
         </div>

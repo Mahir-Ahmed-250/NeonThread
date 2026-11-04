@@ -188,12 +188,15 @@ const defaultHomeAds: HomeAd[] = [
   }
 ];
 
-const DatabaseLoader = () => {
+const DatabaseLoader = ({ onComplete }: { onComplete: () => void }) => {
   const [progress, setProgress] = useState(0);
 
   useEffect(() => {
+    // Prevent scrolling while loading
+    document.body.style.overflow = 'hidden';
+    
     const start = Date.now();
-    const duration = 500;
+    const duration = 800; // Minimum duration for visual smoothness
 
     const interval = setInterval(() => {
       const elapsed = Date.now() - start;
@@ -202,21 +205,32 @@ const DatabaseLoader = () => {
 
       if (elapsed >= duration) {
         clearInterval(interval);
+        setTimeout(() => {
+          document.body.style.overflow = '';
+          onComplete();
+        }, 200); // Small delay for 100% visibility
       }
     }, 30);
-    return () => clearInterval(interval);
-  }, []);
+    
+    return () => {
+      clearInterval(interval);
+      document.body.style.overflow = '';
+    };
+  }, [onComplete]);
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col items-center justify-center p-6">
+    <div className="fixed inset-0 bg-white dark:bg-gray-950 flex flex-col items-center justify-center p-6 z-[9999]">
       <div className="w-full max-w-sm flex flex-col items-center gap-4">
-        <p className="text-[10px] uppercase font-black tracking-widest text-gray-500">{progress}% </p>
+        <div className="flex flex-col items-center gap-1">
+          <p className="text-[10px] uppercase font-black tracking-widest text-gray-500"></p>
+          <p className="text-2xl font-black text-black dark:text-white">{progress}%</p>
+        </div>
         <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden relative">
           <motion.div
             initial={{ width: "0%" }}
             animate={{ width: `${progress}%` }}
             transition={{ ease: "linear", duration: 0.1 }}
-            className="h-full bg-black dark:bg-white"
+            className="h-full bg-black dark:bg-white shadow-[0_0_10px_rgba(0,0,0,0.1)] dark:shadow-[0_0_10px_rgba(255,255,255,0.1)]"
           />
         </div>
       </div>
@@ -406,6 +420,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
+  const [showApp, setShowApp] = useState(false);
 
   const serverSave = async (key: string, data: any) => {
     if (!authToken) return;
@@ -1445,8 +1460,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       announcements: announcements.filter(a => !a.deleted), addAnnouncement, updateAnnouncement, deleteAnnouncement,
       socialLinks, updateSocialLinks
     }}>
-      {!isDbLoaded && <DatabaseLoader />}
-      {children}
+      {!showApp && <DatabaseLoader onComplete={() => setShowApp(true)} />}
+      {showApp && children}
     </ShopContext.Provider>
   );
 };
