@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import SuccessAnimation from '../components/SuccessAnimation';
 import { Order } from '../types';
 import { generateInvoicePDF } from '../lib/invoiceUtils';
+import { ImageWithSkeleton } from '../components/ImageWithSkeleton';
 
 const BANGLADESH_DISTRICTS = [
   { en: 'Bagerhat', bn: 'বাগেরহাট' },
@@ -335,7 +336,7 @@ export default function Checkout() {
                 <div key={(item as any).cartItemId || (item.id + (item.selectedSize || 'M') + (item.image || ''))} className="flex gap-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800 items-center justify-between">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
                     {item.image ? (
-                      <img
+                      <ImageWithSkeleton
                         src={item.image}
                         alt={item.name}
                         className="w-12 h-12 rounded-lg object-cover bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex-shrink-0"

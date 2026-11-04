@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-react';
 import { Product } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { Skeleton } from './Skeleton';
+import { ImageWithSkeleton } from './ImageWithSkeleton';
 
 interface QuickViewModalProps {
   product: Product | null;
@@ -118,8 +120,8 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClos
             <div className="md:w-[50%] relative bg-gray-100 dark:bg-gray-800 h-[40vh] sm:h-[50vh] md:h-full overflow-hidden shrink-0">
               {/* Skeleton Loader */}
               {isImageLoading && (
-                <div className="absolute inset-0 z-10 bg-gray-200 dark:bg-gray-700 flex items-center justify-center">
-                  <div className="w-8 h-8 border-3 border-gray-300 border-t-black dark:border-t-white rounded-full animate-spin opacity-30" />
+                <div className="absolute inset-0 z-10">
+                  <Skeleton className="w-full h-full rounded-none" />
                 </div>
               )}
 
@@ -180,7 +182,7 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClos
                         }`}
                       >
                         {img ? (
-                          <img 
+                          <ImageWithSkeleton 
                             src={img} 
                             alt="" 
                             className="w-full h-full object-cover"
