@@ -4,6 +4,7 @@ import { Trash2, Plus, Minus, ArrowRight, X } from 'lucide-react';
 import { useShop } from '../ShopContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { useToast } from './Toast';
+import { ImageWithSkeleton } from './ImageWithSkeleton';
 
 export default function CartSidebar() {
   const { cart, products, removeFromCart, removeFromCartById, updateCartQuantity, updateCartQuantityById, updateCartItemSize, updateCartItemSizeById, isCartOpen, setIsCartOpen, clearCart } = useShop();
@@ -77,7 +78,7 @@ export default function CartSidebar() {
                   {cart.map(item => (
                     <li key={(item as any).cartItemId || (item.id + (item.selectedSize || 'M') + (item.image || ''))} className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-3">
                       {item.image ? (
-                        <img
+                        <ImageWithSkeleton
                           src={item.image}
                           alt={item.name}
                           className="w-16 h-16 object-cover rounded-lg bg-gray-50 dark:bg-gray-900 flex-shrink-0"

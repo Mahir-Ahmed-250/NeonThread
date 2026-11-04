@@ -5,6 +5,8 @@ import { ArrowLeft, ShoppingCart, ShieldCheck, Truck, Plus, Minus, X, Ruler, Sta
 import { motion, AnimatePresence } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
 import Swal from 'sweetalert2';
+import { ImageWithSkeleton } from '../components/ImageWithSkeleton';
+import { Skeleton } from '../components/Skeleton';
 
 export default function ProductDetails() {
   const { id } = useParams<{ id: string }>();
@@ -19,6 +21,11 @@ export default function ProductDetails() {
   const [isZooming, setIsZooming] = useState(false);
   const [isCopied, setIsCopied] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
+  const [isMainImageLoaded, setIsMainImageLoaded] = useState(false);
+
+  useEffect(() => {
+    setIsMainImageLoaded(false);
+  }, [activeImageIndex, id]);
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(window.location.href);
@@ -253,29 +260,36 @@ export default function ProductDetails() {
             >
               <AnimatePresence mode="wait">
                 {galleryImages[activeImageIndex] ? (
-                  <motion.img 
-                    key={activeImageIndex}
-                    initial={{ opacity: 0 }}
-                    animate={{ 
-                      opacity: 1,
-                      scale: isZooming ? 2.5 : 1
-                    }}
-                    exit={{ opacity: 0 }}
-                    transition={{ 
-                      opacity: { duration: 0.2 },
-                      scale: { duration: 0.3, ease: "easeOut" }
-                    }}
-                    style={{ 
-                      transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` 
-                    }}
-                    src={galleryImages[activeImageIndex]} 
-                    alt={product.name} 
-                    loading="eager"
-                    decoding="async"
-                    fetchPriority="high"
-                    className="w-full h-full object-contain object-center absolute inset-0 pointer-events-none"
-                    referrerPolicy="no-referrer"
-                  />
+                  <div key={activeImageIndex} className="w-full h-full absolute inset-0">
+                    <motion.img 
+                      initial={{ opacity: 0 }}
+                      animate={{ 
+                        opacity: isMainImageLoaded ? 1 : 0,
+                        scale: isZooming ? 2.5 : 1
+                      }}
+                      exit={{ opacity: 0 }}
+                      transition={{ 
+                        opacity: { duration: 0.2 },
+                        scale: { duration: 0.3, ease: "easeOut" }
+                      }}
+                      style={{ 
+                        transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` 
+                      }}
+                      src={galleryImages[activeImageIndex]} 
+                      alt={product.name} 
+                      loading="eager"
+                      decoding="async"
+                      fetchPriority="high"
+                      onLoad={() => setIsMainImageLoaded(true)}
+                      className="w-full h-full object-contain object-center pointer-events-none"
+                      referrerPolicy="no-referrer"
+                    />
+                    {!isMainImageLoaded && (
+                      <div className="absolute inset-0 z-10">
+                        <Skeleton className="w-full h-full rounded-none" />
+                      </div>
+                    )}
+                  </div>
                 ) : null}
               </AnimatePresence>
               {product.isHotSale && (
@@ -339,13 +353,10 @@ export default function ProductDetails() {
                         : 'border-gray-200 hover:border-gray-400'
                     }`}
                   >
-                    <img 
+                    <ImageWithSkeleton 
                       src={imgSrc} 
-                      alt="" 
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover" 
-                      referrerPolicy="no-referrer"
+                      alt={`Thumbnail ${idx + 1}`} 
+                      className="w-full h-full"
                     />
                   </button>
                 ))}
