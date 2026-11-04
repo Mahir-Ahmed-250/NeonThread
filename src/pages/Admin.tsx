@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie, Legend } from 'recharts';
 import { useShop } from '../ShopContext';
-import { Package, ShoppingBag, Ticket, Trash2, Plus, Minus, Edit, LogOut, Layout, Image, Camera, X, Users, Mail, MonitorPlay, Printer, HelpCircle, ShieldCheck, ShieldAlert, Ruler, ShoppingBasket, Home, TrendingUp, DollarSign, PackageCheck, UserCircle, Settings, Megaphone, MessageSquare, Search, Calendar, MapPin, Truck, CheckCircle, XCircle, Download, Clock, Bell, Key, History, Loader2, Star, Tag, Layers, Check, Phone, Facebook, Instagram, Youtube, Twitter, Music2, Share2, UploadCloud } from 'lucide-react';
+import { Package, ShoppingBag, Ticket, Trash2, Plus, Minus, Edit, LogOut, Layout, Image, Camera, X, Users, Mail, MonitorPlay, Printer, HelpCircle, ShieldCheck, ShieldAlert, Ruler, ShoppingBasket, Home, TrendingUp, DollarSign, PackageCheck, UserCircle, Settings, Megaphone, MessageSquare, Search, Calendar, MapPin, Truck, CheckCircle, XCircle, Download, Clock, Bell, Key, History, Loader2, Star, Tag, Layers, Check, Phone, Facebook, Instagram, Youtube, Twitter, Music2, Share2, UploadCloud, ArrowUp, ArrowDown } from 'lucide-react';
 import { Product, ProductImageVariant, Category, PopupAd, FAQItem, PolicyItem, HomeAd, AdminUser, LookbookImage, CategoryBanner, Coupon, Order, AdminPermissions, Review, Announcement, SocialLink } from '../types';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
@@ -1224,7 +1224,7 @@ export default function AdminDashboard() {
       .then(data => setDbStatus(data))
       .catch(err => console.error('Error fetching db status:', err));
   }, []);
-  const { products, reviews, updateReviewStatus, deleteReview, orders, coupons, slides, updateSlide, categoryBanners, updateCategoryBanner, lookbook, subscribers, contactMessages, popupAds, homeAds, faqs, policies, categories, addCategory, updateCategory, deleteCategory, addProduct, updateProduct, deleteProduct, updateOrderStatus, updateOrderNotes, updateOrder, deleteOrder, addCoupon, updateCoupon, deleteCoupon, addSlide, deleteSlide, addCategoryBanner, deleteCategoryBanner, addLookbookImage, updateLookbookImage, deleteLookbookImage, deleteSubscriber, deleteContactMessage, addPopupAd, deletePopupAd, updatePopupAd, addHomeAd, deleteHomeAd, updateHomeAd, addFAQ, updateFAQ, deleteFAQ, addPolicy, updatePolicy, deletePolicy, isAdminAuth, loginAdmin, logoutAdmin, updateProfile, currentAdmin, admins, addAdmin, updateAdmin, deleteAdmin } = useShop();
+  const { products, reviews, updateReviewStatus, deleteReview, orders, coupons, slides, updateSlide, categoryBanners, updateCategoryBanner, lookbook, subscribers, contactMessages, popupAds, homeAds, faqs, policies, categories, addCategory, updateCategory, deleteCategory, addProduct, updateProduct, deleteProduct, updateOrderStatus, updateOrderNotes, updateOrder, deleteOrder, addCoupon, updateCoupon, deleteCoupon, addSlide, deleteSlide, addCategoryBanner, deleteCategoryBanner, addLookbookImage, updateLookbookImage, deleteLookbookImage, moveLookbookImage, deleteSubscriber, deleteContactMessage, addPopupAd, deletePopupAd, updatePopupAd, addHomeAd, deleteHomeAd, updateHomeAd, addFAQ, updateFAQ, deleteFAQ, addPolicy, updatePolicy, deletePolicy, isAdminAuth, loginAdmin, logoutAdmin, updateProfile, currentAdmin, admins, addAdmin, updateAdmin, deleteAdmin } = useShop();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
@@ -7044,8 +7044,14 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="md:col-span-2">
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Image URL</label>
-                      <input required className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" value={newLookbook.image} onChange={e=>setNewLookbook({...newLookbook, image: e.target.value})} placeholder="https://unsplash.com/etc..." />
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Image URL / Upload Image</label>
+                      <div className="flex gap-2">
+                        <input required className="flex-1 border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" value={newLookbook.image} onChange={e=>setNewLookbook({...newLookbook, image: e.target.value})} placeholder="https://unsplash.com/etc..." />
+                        <label className="bg-black text-white p-3 rounded-xl cursor-pointer hover:bg-gray-800 transition-colors">
+                          <Camera className="w-5 h-5" />
+                          <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e.target.files?.[0] || null, (url) => setNewLookbook({...newLookbook, image: url}))} />
+                        </label>
+                      </div>
                     </div>
 
                     <div>
@@ -7059,7 +7065,34 @@ export default function AdminDashboard() {
                     </div>
 
                     <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Grid Style Class</label>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Grid Layout / গ্রিড সাইজ</label>
+                      <select 
+                        className="w-full border border-gray-200 rounded-xl p-3 text-sm font-bold focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors appearance-none" 
+                        value={newLookbook.className === 'md:col-span-2 md:row-span-2' ? 'large' : 
+                               newLookbook.className === 'md:col-span-2' ? 'wide' : 
+                               newLookbook.className === 'md:row-span-2' ? 'tall' : 
+                               newLookbook.className === '' ? 'normal' : 'custom'} 
+                        onChange={e => {
+                          const val = e.target.value;
+                          if (val === 'normal') setNewLookbook({...newLookbook, className: ''});
+                          else if (val === 'large') setNewLookbook({...newLookbook, className: 'md:col-span-2 md:row-span-2'});
+                          else if (val === 'wide') setNewLookbook({...newLookbook, className: 'md:col-span-2'});
+                          else if (val === 'tall') setNewLookbook({...newLookbook, className: 'md:row-span-2'});
+                        }}
+                      >
+                        <option value="normal">Normal (1x1)</option>
+                        <option value="large">Large Square (2x2)</option>
+                        <option value="wide">Wide (2x1)</option>
+                        <option value="tall">Tall (1x2)</option>
+                        <option value="custom">Custom (Advanced)</option>
+                      </select>
+                      <p className="text-[9px] text-gray-400 mt-1 font-medium italic">
+                        * Normal: 1x1, Large: 2x2 grid space, Wide: Takes 2 columns, Tall: Takes 2 rows.
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Custom Class (Advanced)</label>
                       <input className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" value={newLookbook.className} onChange={e=>setNewLookbook({...newLookbook, className: e.target.value})} placeholder="যেমন - md:col-span-2 md:row-span-2" />
                     </div>
 
@@ -7114,7 +7147,7 @@ export default function AdminDashboard() {
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Title</th>
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Image</th>
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Link Destination</th>
-                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Grid Style Class</th>
+                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Layout Style</th>
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest text-right">Actions</th>
                   </tr>
                 </thead>
@@ -7129,41 +7162,64 @@ export default function AdminDashboard() {
                           {l.image && <img src={l.image} className="w-16 h-16 rounded object-cover shadow-sm border border-gray-200" alt="" />}
                         </td>
                         <td className="p-4 font-mono text-xs text-gray-600">{l.link || '/shop'}</td>
-                        <td className="p-4 text-xs font-mono text-gray-400">{l.className || <span className="italic text-gray-300">Default (1x1)</span>}</td>
+                        <td className="p-4 text-xs font-mono text-gray-400">
+                          {l.className === 'md:col-span-2 md:row-span-2' ? 'Large (2x2)' : 
+                           l.className === 'md:col-span-2' ? 'Wide (2x1)' : 
+                           l.className === 'md:row-span-2' ? 'Tall (1x2)' : 
+                           l.className === '' ? 'Normal (1x1)' : 
+                           (l.className || 'Default')}
+                        </td>
                         <td className="p-4 text-right">
-                          <button 
-                            onClick={() => {
-                              setEditingLookbook(l);
-                              setNewLookbook({
-                                image: l.image,
-                                link: l.link,
-                                className: l.className || '',
-                                widthPercent: l.widthPercent || '100%',
-                                serial: l.serial || 1,
-                                title: l.title || ''
+                          <div className="flex items-center justify-end gap-1">
+                            <button 
+                              onClick={() => moveLookbookImage(l.id, 'up')}
+                              className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors"
+                              title="Move Up"
+                            >
+                              <ArrowUp className="h-4 w-4"/>
+                            </button>
+                            <button 
+                              onClick={() => moveLookbookImage(l.id, 'down')}
+                              className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors"
+                              title="Move Down"
+                            >
+                              <ArrowDown className="h-4 w-4"/>
+                            </button>
+                            <div className="w-px h-4 bg-gray-200 mx-1" />
+                            <button 
+                              onClick={() => {
+                                setEditingLookbook(l);
+                                setNewLookbook({
+                                  image: l.image,
+                                  link: l.link,
+                                  className: l.className || '',
+                                  widthPercent: l.widthPercent || '100%',
+                                  serial: l.serial || 1,
+                                  title: l.title || ''
+                                });
+                                setIsAddingLookbook(true);
+                              }} 
+                              className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg"
+                              title="Edit Item"
+                            >
+                              <Edit className="h-5 w-5"/>
+                            </button>
+                            <button onClick={async () => {
+                              const result = await Swal.fire({
+                                title: 'Are you sure?',
+                                text: "Delete this lookbook image?",
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonColor: '#000',
+                                cancelButtonColor: '#d33',
+                                confirmButtonText: 'Yes, delete it!'
                               });
-                              setIsAddingLookbook(true);
-                            }} 
-                            className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg inline-block mr-2"
-                            title="Edit Item"
-                          >
-                            <Edit className="h-5 w-5"/>
-                          </button>
-                          <button onClick={async () => {
-                            const result = await Swal.fire({
-                              title: 'Are you sure?',
-                              text: "Delete this lookbook image?",
-                              icon: 'warning',
-                              showCancelButton: true,
-                              confirmButtonColor: '#000',
-                              cancelButtonColor: '#d33',
-                              confirmButtonText: 'Yes, delete it!'
-                            });
-                            if (result.isConfirmed) {
-                              deleteLookbookImage(l.id);
-                              Swal.fire('Deleted!', 'Lookbook image has been deleted.', 'success');
-                            }
-                          }} className="text-red-500 hover:bg-red-50 p-2 rounded-lg" title="Delete Item"><Trash2 className="h-5 w-5"/></button>
+                              if (result.isConfirmed) {
+                                deleteLookbookImage(l.id);
+                                Swal.fire('Deleted!', 'Lookbook image has been deleted.', 'success');
+                              }
+                            }} className="text-red-500 hover:bg-red-50 p-2 rounded-lg" title="Delete Item"><Trash2 className="h-5 w-5"/></button>
+                          </div>
                         </td>
                       </tr>
                     ))}

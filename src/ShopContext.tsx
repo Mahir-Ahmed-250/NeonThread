@@ -56,6 +56,7 @@ interface ShopContextType {
   addLookbookImage: (img: Omit<LookbookImage, 'id'>) => void;
   updateLookbookImage: (img: LookbookImage) => void;
   deleteLookbookImage: (id: string) => void;
+  moveLookbookImage: (id: string, direction: 'up' | 'down') => void;
   addProduct: (product: Omit<Product, 'id'>) => void;
   updateProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
@@ -1327,6 +1328,30 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const deleteLookbookImage = (id: string) => {
     setLookbook(prev => prev.map(l => l.id === id ? { ...l, deleted: true } : l));
   };
+  
+  const moveLookbookImage = (id: string, direction: 'up' | 'down') => {
+    setLookbook(prev => {
+      const activeItems = prev.filter(l => !l.deleted).sort((a, b) => (a.serial || 0) - (b.serial || 0));
+      const currentIndex = activeItems.findIndex(l => l.id === id);
+      if (currentIndex === -1) return prev;
+      
+      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (targetIndex < 0 || targetIndex >= activeItems.length) return prev;
+      
+      const currentItem = activeItems[currentIndex];
+      const targetItem = activeItems[targetIndex];
+      
+      // Swap serials
+      const currentSerial = currentItem.serial;
+      const targetSerial = targetItem.serial;
+      
+      return prev.map(l => {
+        if (l.id === currentItem.id) return { ...l, serial: targetSerial };
+        if (l.id === targetItem.id) return { ...l, serial: currentSerial };
+        return l;
+      });
+    });
+  };
 
   const addSubscriber = (email: string) => {
     const normalizedEmail = email.trim().toLowerCase();
@@ -1446,7 +1471,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loginAdmin, logoutAdmin, updateProfile, addAdmin, updateAdmin, deleteAdmin, updateContactInfo, addProduct, updateProduct, deleteProduct,
       addSlide, updateSlide, deleteSlide, addCategoryBanner, updateCategoryBanner, deleteCategoryBanner, 
       addCategory, updateCategory, deleteCategory,
-      addLookbookImage, updateLookbookImage, deleteLookbookImage,
+      addLookbookImage, updateLookbookImage, deleteLookbookImage, moveLookbookImage,
       addCoupon, updateCoupon, deleteCoupon,
       updateOrderStatus, updateOrderNotes, updateOrder, deleteOrder,
       addSubscriber, deleteSubscriber, addContactMessage, deleteContactMessage, addPopupAd, deletePopupAd, updatePopupAd,
