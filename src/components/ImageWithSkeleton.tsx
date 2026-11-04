@@ -23,15 +23,19 @@ export const ImageWithSkeleton: React.FC<ImageWithSkeletonProps> = ({
   const [hasError, setHasError] = useState(false);
 
   return (
-    <div className={`relative overflow-hidden bg-gray-100 dark:bg-gray-800 ${className}`}>
-      {!isLoaded && !hasError && (
-        <div className={`absolute inset-0 z-10 ${skeletonClassName}`}>
-          <Skeleton className="w-full h-full rounded-none" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="h-8 w-8 border-2 border-gray-300 border-t-black rounded-full animate-spin" />
-          </div>
-        </div>
-      )}
+    <div className={`relative overflow-hidden ${className}`}>
+      <AnimatePresence>
+        {!isLoaded && !hasError && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+            className={`absolute inset-0 z-10 ${skeletonClassName}`}
+          >
+            <Skeleton className="w-full h-full rounded-none" />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <img
         src={src}
@@ -45,7 +49,7 @@ export const ImageWithSkeleton: React.FC<ImageWithSkeletonProps> = ({
         referrerPolicy={referrerPolicy}
         className={`w-full h-full object-cover transition-opacity duration-500 ${
           isLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
+        } ${className}`}
       />
       
       {hasError && (

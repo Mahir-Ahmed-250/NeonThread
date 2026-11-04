@@ -1103,10 +1103,6 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
     setHeaders: (res, path) => {
       if (path.endsWith('.js') || path.endsWith('.mjs')) {
         res.setHeader('Content-Type', 'application/javascript');
-      } else if (path.endsWith('.css')) {
-        res.setHeader('Content-Type', 'text/css');
-      } else if (path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg')) {
-        res.setHeader('Content-Type', 'image/' + path.split('.').pop());
       }
     }
   }));

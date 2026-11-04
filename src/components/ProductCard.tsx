@@ -58,7 +58,7 @@ export default function ProductCard({ product }: { product: Product, key?: React
       }}
       className="bg-white dark:bg-gray-900 p-3 rounded-2xl flex flex-col border border-gray-100 dark:border-gray-800 group relative hover:shadow-xl hover:shadow-black/5 transition-shadow"
     >
-      <Link to={`/product/${product.id}`} className="aspect-square rounded-xl mb-3 flex items-center justify-center relative overflow-hidden block">
+      <Link to={`/product/${product.id}`} className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-xl mb-3 flex items-center justify-center relative overflow-hidden block">
         {product.image ? (
           <ImageWithSkeleton
             src={product.image}
