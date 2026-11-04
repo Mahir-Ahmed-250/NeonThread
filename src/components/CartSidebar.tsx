@@ -76,11 +76,13 @@ export default function CartSidebar() {
                 <ul className="space-y-3">
                   {cart.map(item => (
                     <li key={(item as any).cartItemId || (item.id + (item.selectedSize || 'M') + (item.image || ''))} className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 flex gap-3">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-16 h-16 object-cover rounded-lg bg-gray-50 dark:bg-gray-900 flex-shrink-0"
-                      />
+                      {item.image ? (
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-16 h-16 object-cover rounded-lg bg-gray-50 dark:bg-gray-900 flex-shrink-0"
+                        />
+                      ) : null}
                       <div className="flex-1 flex flex-col min-w-0">
                         <div className="flex justify-between items-start mb-0.5">
                           <h3 className="font-bold text-[11px] line-clamp-1 dark:text-white uppercase truncate pr-2">{item.name}</h3>

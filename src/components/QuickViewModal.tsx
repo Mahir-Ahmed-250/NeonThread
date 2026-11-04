@@ -124,22 +124,24 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClos
               )}
 
               <AnimatePresence initial={false} custom={direction}>
-                <motion.img
-                  key={currentImageIndex}
-                  src={images[currentImageIndex]}
-                  alt={product.name}
-                  custom={direction}
-                  variants={variants}
-                  initial="enter"
-                  animate="center"
-                  exit="exit"
-                  onLoad={() => setIsImageLoading(false)}
-                  transition={{
-                    x: { type: "spring", stiffness: 300, damping: 30 },
-                    opacity: { duration: 0.2 }
-                  }}
-                  className="absolute inset-0 w-full h-full object-cover"
-                />
+                {images[currentImageIndex] ? (
+                  <motion.img
+                    key={currentImageIndex}
+                    src={images[currentImageIndex]}
+                    alt={product.name}
+                    custom={direction}
+                    variants={variants}
+                    initial="enter"
+                    animate="center"
+                    exit="exit"
+                    onLoad={() => setIsImageLoading(false)}
+                    transition={{
+                      x: { type: "spring", stiffness: 300, damping: 30 },
+                      opacity: { duration: 0.2 }
+                    }}
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                ) : null}
               </AnimatePresence>
 
               {images.length > 1 && (
@@ -177,11 +179,13 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClos
                             : 'border-transparent opacity-50 hover:opacity-100'
                         }`}
                       >
-                        <img 
-                          src={img} 
-                          alt="" 
-                          className="w-full h-full object-cover"
-                        />
+                        {img ? (
+                          <img 
+                            src={img} 
+                            alt="" 
+                            className="w-full h-full object-cover"
+                          />
+                        ) : null}
                       </button>
                     ))}
                   </div>

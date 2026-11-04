@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Product, Order, Category, Coupon, CartItem, CustomerInfo, Slide, CategoryBanner, LookbookImage, Subscriber, ContactMessage, PopupAd, HomeAd, AdminUser, OTPRecord, Review, ContactInfo, Announcement, FAQItem, PolicyItem, SocialLink } from './types';
-import { initialProducts, initialCoupons, initialSlides, initialCategoryBanners, initialLookbook } from './mockData';
 import { generateId } from './lib/utils';
 
 interface ShopContextType {
@@ -110,6 +109,25 @@ interface ShopContextType {
 
 const ShopContext = createContext<ShopContextType | undefined>(undefined);
 
+const defaultProducts: Product[] = [
+  {
+    id: 'p1',
+    name: 'Classic White T-Shirt',
+    price: 450,
+    image: '',
+    isHotSale: true,
+    description: 'Perfect classic white t-shirt for everyday wear, made with 100% cotton.',
+    category: 'Basic',
+    code: 'TY-1001',
+    stock: 50
+  }
+];
+
+const defaultCategories: Category[] = [
+  { id: 'cat1', name: 'Basic', slug: 'basic' },
+  { id: 'cat2', name: 'Graphic', slug: 'graphic' }
+];
+
 const defaultFAQs: FAQItem[] = [
   {
     id: 'faq_1',
@@ -154,7 +172,7 @@ const defaultPolicies: PolicyItem[] = [
 const defaultHomeAds: HomeAd[] = [
   {
     id: 'ha_1',
-    imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&q=80&w=1500',
+    imageUrl: '',
     title: 'Trendy Bengal Design Exclusives',
     subtitle: 'Get up to 30% discount on classic t-shirts with premium printing.',
     linkUrl: '/shop',
@@ -162,7 +180,7 @@ const defaultHomeAds: HomeAd[] = [
   },
   {
     id: 'ha_2',
-    imageUrl: 'https://images.unsplash.com/photo-1479064555552-3ef4979f8908?auto=format&fit=crop&q=80&w=1500',
+    imageUrl: '',
     title: 'Casual Summer Premium Collection',
     subtitle: 'Buy any 3 products and grab FREE delivery across all of Bangladesh.',
     linkUrl: '/shop',
@@ -219,79 +237,126 @@ const safeParse = (saved: string | null, fallback: any) => {
   }
 };
 
+const COLLECTION_KEYS = [
+  "products",
+  "faqs",
+  "policies",
+  "orders",
+  "coupons",
+  "slides",
+  "categoryBanners",
+  "lookbook",
+  "subscribers",
+  "contactMessages",
+  "popupAds",
+  "homeAds",
+  "admins",
+  "otps",
+  "categories",
+  "maintenance_mode",
+  "contactInfo",
+  "wishlist",
+  "comparison",
+  "reviews",
+  "announcements",
+  "socialLinks"
+];
+
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('ts_products');
-    const data = safeParse(saved, initialProducts);
-    return data.map((p: Product) => ({
-      ...p,
-      stock: p.stock !== undefined ? p.stock : 0
-    }));
+    return safeParse(localStorage.getItem('ts_products'), defaultProducts);
   });
 
-  const [categories, setCategories] = useState<Category[]>(() => safeParse(localStorage.getItem('ts_categories'), []));
+  const [categories, setCategories] = useState<Category[]>(() => {
+    return safeParse(localStorage.getItem('ts_categories'), defaultCategories);
+  });
 
-  const [contactInfo, setContactInfo] = useState<ContactInfo>(() => safeParse(localStorage.getItem('ts_contact_info'), {
-    storeAddress: "Our Store(Dhaka)",
-    storeAddressSubtitle: "Dhaka Uddan\nDhaka, Bangladesh",
-    phone: "+8801515668345",
-    phoneSubtitle: "Saturday-Sunday, 9am - 8pm",
-    email: "support@trendycartbd.com",
-    emailSubtitle: "We typically reply within 24 hours"
-  }));
+  const [contactInfo, setContactInfo] = useState<ContactInfo>(() => {
+    return safeParse(localStorage.getItem('ts_contact_info'), {
+      storeAddress: "Our Store(Dhaka)",
+      storeAddressSubtitle: "Dhaka Uddan\nDhaka, Bangladesh",
+      phone: "+8801515668345",
+      phoneSubtitle: "Saturday-Sunday, 9am - 8pm",
+      email: "support@trendycartbd.com",
+      emailSubtitle: "We typically reply within 24 hours"
+    });
+  });
 
-  const [faqs, setFaqs] = useState<FAQItem[]>(() => safeParse(localStorage.getItem('ts_faqs'), defaultFAQs));
+  const [faqs, setFaqs] = useState<FAQItem[]>(() => {
+    return safeParse(localStorage.getItem('ts_faqs'), defaultFAQs);
+  });
 
-  const [policies, setPolicies] = useState<PolicyItem[]>(() => safeParse(localStorage.getItem('ts_policies'), defaultPolicies));
+  const [policies, setPolicies] = useState<PolicyItem[]>(() => {
+    return safeParse(localStorage.getItem('ts_policies'), defaultPolicies);
+  });
 
-  const [orders, setOrders] = useState<Order[]>(() => safeParse(localStorage.getItem('ts_orders'), []));
+  const [orders, setOrders] = useState<Order[]>(() => {
+    return safeParse(localStorage.getItem('ts_orders'), []);
+  });
 
-  const [coupons, setCoupons] = useState<Coupon[]>(() => safeParse(localStorage.getItem('ts_coupons'), initialCoupons));
+  const [coupons, setCoupons] = useState<Coupon[]>(() => {
+    return safeParse(localStorage.getItem('ts_coupons'), []);
+  });
 
-  const [cart, setCart] = useState<CartItem[]>(() => safeParse(localStorage.getItem('ts_cart'), []));
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    return safeParse(localStorage.getItem('ts_cart'), []);
+  });
 
-  const [slides, setSlides] = useState<Slide[]>(() => safeParse(localStorage.getItem('ts_slides'), initialSlides));
+  const [slides, setSlides] = useState<Slide[]>(() => {
+    return safeParse(localStorage.getItem('ts_slides'), []);
+  });
 
-  const [categoryBanners, setCategoryBanners] = useState<CategoryBanner[]>(() => safeParse(localStorage.getItem('ts_category_banners'), initialCategoryBanners));
+  const [categoryBanners, setCategoryBanners] = useState<CategoryBanner[]>(() => {
+    return safeParse(localStorage.getItem('ts_category_banners'), []);
+  });
 
-  const [lookbook, setLookbook] = useState<LookbookImage[]>(() => safeParse(localStorage.getItem('ts_lookbook'), initialLookbook));
+  const [lookbook, setLookbook] = useState<LookbookImage[]>(() => {
+    return safeParse(localStorage.getItem('ts_lookbook'), []);
+  });
 
-  const [subscribers, setSubscribers] = useState<Subscriber[]>(() => safeParse(localStorage.getItem('ts_subscribers'), []));
+  const [subscribers, setSubscribers] = useState<Subscriber[]>(() => {
+    return safeParse(localStorage.getItem('ts_subscribers'), []);
+  });
 
-  const [contactMessages, setContactMessages] = useState<ContactMessage[]>(() => safeParse(localStorage.getItem('ts_contact_msgs'), []));
+  const [contactMessages, setContactMessages] = useState<ContactMessage[]>(() => {
+    return safeParse(localStorage.getItem('ts_contact_msgs'), []);
+  });
 
-  const [popupAds, setPopupAds] = useState<PopupAd[]>(() => safeParse(localStorage.getItem('ts_popup_ads'), []));
+  const [popupAds, setPopupAds] = useState<PopupAd[]>(() => {
+    return safeParse(localStorage.getItem('ts_popup_ads'), []);
+  });
 
-  const [homeAds, setHomeAds] = useState<HomeAd[]>(() => safeParse(localStorage.getItem('ts_home_ads'), defaultHomeAds));
+  const [homeAds, setHomeAds] = useState<HomeAd[]>(() => {
+    return safeParse(localStorage.getItem('ts_home_ads'), defaultHomeAds);
+  });
 
-  const [otps, setOtps] = useState<OTPRecord[]>(() => safeParse(localStorage.getItem('ts_otps'), []));
+  const [otps, setOtps] = useState<OTPRecord[]>(() => {
+    return safeParse(localStorage.getItem('ts_otps'), []);
+  });
 
-  const [wishlist, setWishlist] = useState<string[]>(() => safeParse(localStorage.getItem('ts_wishlist'), []));
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    return safeParse(localStorage.getItem('ts_wishlist'), []);
+  });
   
-  const [comparisonItems, setComparisonItems] = useState<string[]>(() => safeParse(localStorage.getItem('ts_comparison'), []));
+  const [comparisonItems, setComparisonItems] = useState<string[]>(() => {
+    return safeParse(localStorage.getItem('ts_comparison'), []);
+  });
 
-  const [reviews, setReviews] = useState<Review[]>(() => safeParse(localStorage.getItem('ts_reviews'), []));
-  const [announcements, setAnnouncements] = useState<Announcement[]>(() => safeParse(localStorage.getItem('ts_announcements'), [
-    {
-      id: 'ann_1',
-      text: 'Special Offer: Free delivery on orders over ৳1500!',
-      isActive: true,
-      isMarquee: false,
-      backgroundColor: '#000000',
-      textColor: '#ffffff'
-    }
-  ]));
+  const [reviews, setReviews] = useState<Review[]>(() => {
+    return safeParse(localStorage.getItem('ts_reviews'), []);
+  });
 
-  const [socialLinks, setSocialLinks] = useState<SocialLink[]>(() => safeParse(localStorage.getItem('ts_social_links'), [
-    { id: 'sl_fb', platform: 'facebook', url: '', isActive: false },
-    { id: 'sl_ig', platform: 'instagram', url: '', isActive: false },
-    { id: 'sl_wa', platform: 'whatsapp', url: '', isActive: false },
-    { id: 'sl_tk', platform: 'tiktok', url: '', isActive: false },
-    { id: 'sl_yt', platform: 'youtube', url: '', isActive: false },
-    { id: 'sl_x', platform: 'x', url: '', isActive: false }
-  ]));
+  const [announcements, setAnnouncements] = useState<Announcement[]>(() => {
+    return safeParse(localStorage.getItem('ts_announcements'), []);
+  });
 
-  const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean>(() => safeParse(localStorage.getItem('ts_maintenance_mode'), false));
+  const [socialLinks, setSocialLinks] = useState<SocialLink[]>(() => {
+    return safeParse(localStorage.getItem('ts_social_links'), []);
+  });
+
+  const [isMaintenanceMode, setIsMaintenanceMode] = useState<boolean>(() => {
+    return localStorage.getItem('ts_maintenance_mode') === 'true';
+  });
 
   const defaultSuperAdmin: AdminUser = {
     id: 'super_admin_id',
@@ -318,17 +383,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const [admins, setAdmins] = useState<AdminUser[]>(() => safeParse(localStorage.getItem('ts_admins'), [defaultSuperAdmin]));
-
-  const [authToken, setAuthToken] = useState<string | null>(() => {
-    return localStorage.getItem('ts_admin_token');
+  const [admins, setAdmins] = useState<AdminUser[]>(() => {
+    return safeParse(localStorage.getItem('ts_admins'), [defaultSuperAdmin]);
   });
 
-  const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(() => safeParse(localStorage.getItem('ts_current_admin'), null));
+  const [authToken, setAuthToken] = useState<string | null>(() => localStorage.getItem('ts_admin_token'));
 
-  const [isAdminAuth, setIsAdminAuth] = useState<boolean>(() => {
-    return !!localStorage.getItem('ts_admin_token') && !!localStorage.getItem('ts_current_admin');
+  const [currentAdmin, setCurrentAdmin] = useState<AdminUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('ts_current_admin');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
+
+  const [isAdminAuth, setIsAdminAuth] = useState<boolean>(() => !!localStorage.getItem('ts_admin_token') && !!localStorage.getItem('ts_current_admin'));
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     return localStorage.getItem('ts_dark_mode') === 'true';
@@ -389,7 +459,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const fetchDb = async () => {
       try {
         let currentToken = authToken;
-        let endpoint = currentToken ? '/api/admin/db' : '/api/products';
+        let endpoint = currentToken ? '/api/admin/db' : '/api/db';
         let options: RequestInit = currentToken ? {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -408,8 +478,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem('ts_admin_token');
           localStorage.removeItem('ts_current_admin');
           
-          // Retry with public products endpoint
-          endpoint = '/api/products';
+          // Retry with public db endpoint
+          endpoint = '/api/db';
           options = { method: 'GET' };
           res = await fetch(endpoint, options);
         }
@@ -419,7 +489,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         const dbData = await res.json();
         
-        // Handle both full DB object (admin) and products array (public)
+        // Handle both full DB object (admin/public) and products array (legacy public fallback)
         let normalizedDbData: any = {};
         if (Array.isArray(dbData)) {
           normalizedDbData = { products: dbData };
@@ -458,6 +528,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (normalizedDbData.announcements) setAnnouncements(normalizedDbData.announcements);
             if (normalizedDbData.socialLinks) setSocialLinks(normalizedDbData.socialLinks);
             if (normalizedDbData.comparison) setComparisonItems(normalizedDbData.comparison);
+            if (normalizedDbData.contactInfo) setContactInfo(normalizedDbData.contactInfo);
             if (normalizedDbData.maintenance_mode !== undefined) setIsMaintenanceMode(normalizedDbData.maintenance_mode);
           } else if (products.length > 0 || (currentToken && admins.length > 1)) {
              // Server is empty but client has data -> Initialize server
@@ -490,46 +561,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
              });
           }
         } else {
-          // Initialize server with local storage values or default mocks
-          const initialDb = {
-            products,
-            faqs,
-            policies,
-            categories,
-            orders,
-            coupons,
-            slides,
-            categoryBanners,
-            lookbook,
-            subscribers,
-            contactMessages,
-            popupAds,
-            homeAds,
-            admins,
-            otps,
-            announcements,
-            socialLinks,
-            comparison: comparisonItems,
-            maintenance_mode: isMaintenanceMode
-          };
-          await fetch('/api/db/init', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(initialDb)
-          });
+          // Do not initialize server if no data found, just wait for subsequent actions to trigger save
+          console.log("Database is empty, waiting for initial data entry...");
         }
       } catch (err) {
-        console.error("Failed to load DB from server, falling back to mock data:", err);
-        // Fallback to local mocks if server is unreachable
-        setProducts(initialProducts.map((p: any) => ({
-          ...p,
-          stock: p.stock !== undefined ? p.stock : 0
-        })));
-        setCoupons(initialCoupons);
-        setSlides(initialSlides);
-        setCategoryBanners(initialCategoryBanners);
-        setLookbook(initialLookbook);
-        // Note: other states like faqs, policies will remain empty defaults or as initialized in ShopProvider
+        console.error("Failed to load DB from server:", err);
       } finally {
         setIsDbLoaded(true);
       }
@@ -543,12 +579,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const hasInitializedRef = React.useRef(false);
 
     useEffect(() => {
-      try {
-        localStorage.setItem(storageKey, JSON.stringify(data));
-      } catch (err) {
-        console.warn(`Failed to save ${storageKey} to localStorage (quota exceeded or restricted):`, err);
-      }
-      
       if (!isDbLoaded) {
         previousDataRef.current = data;
         return;
@@ -806,13 +836,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const deleteAdmin = (id: string) => {
-    const adminToDelete = admins.find(a => a.id === id);
-    const emailStr = adminToDelete ? adminToDelete.email : `ID - ${id}`;
-    // Hard delete from state so it propagates to server sync and gets removed from MongoDB
-    const updatedAdmins = admins.filter(a => a.id !== id);
+    // Soft delete by setting isActive to false to comply with additive-only rule
+    const updatedAdmins = admins.map(a => a.id === id ? { ...a, isActive: false } : a);
     setAdmins(updatedAdmins);
+    serverSave('admins', updatedAdmins);
+    
     if (currentAdmin && currentAdmin.id === id) {
       setCurrentAdmin(null);
+      setAuthToken(null);
       setIsAdminAuth(false);
     }
   };
@@ -1370,10 +1401,6 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOtps(prev => prev.map(o => o.id === id ? { ...o, deleted: true } : o));
   };
 
-  if (!isDbLoaded) {
-    return <DatabaseLoader />;
-  }
-
   return (
     <ShopContext.Provider value={{
       products: products.filter(p => !p.deleted), 
@@ -1418,6 +1445,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       announcements: announcements.filter(a => !a.deleted), addAnnouncement, updateAnnouncement, deleteAnnouncement,
       socialLinks, updateSocialLinks
     }}>
+      {!isDbLoaded && <DatabaseLoader />}
       {children}
     </ShopContext.Provider>
   );

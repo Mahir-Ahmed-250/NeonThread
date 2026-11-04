@@ -217,7 +217,7 @@ export default function ProductDetails() {
   };
 
   // Default fallback size guide image if none uploaded by admin
-  const fallbackSizeChart = "https://images.unsplash.com/photo-1543087903-1ac2ec7aa8c5?auto=format&fit=crop&q=80&w=1000";
+  const fallbackSizeChart = "";
   const sizeChartImageUrl = product.sizeChartImage || fallbackSizeChart;
 
   return (
@@ -252,29 +252,31 @@ export default function ProductDetails() {
               className="aspect-[4/5] bg-gray-50 rounded-3xl overflow-hidden relative border border-gray-100 shadow-sm group cursor-zoom-in"
             >
               <AnimatePresence mode="wait">
-                <motion.img 
-                  key={activeImageIndex}
-                  initial={{ opacity: 0 }}
-                  animate={{ 
-                    opacity: 1,
-                    scale: isZooming ? 2.5 : 1
-                  }}
-                  exit={{ opacity: 0 }}
-                  transition={{ 
-                    opacity: { duration: 0.2 },
-                    scale: { duration: 0.3, ease: "easeOut" }
-                  }}
-                  style={{ 
-                    transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` 
-                  }}
-                  src={galleryImages[activeImageIndex]} 
-                  alt={product.name} 
-                  loading="eager"
-                  decoding="async"
-                  fetchPriority="high"
-                  className="w-full h-full object-contain object-center absolute inset-0 pointer-events-none"
-                  referrerPolicy="no-referrer"
-                />
+                {galleryImages[activeImageIndex] ? (
+                  <motion.img 
+                    key={activeImageIndex}
+                    initial={{ opacity: 0 }}
+                    animate={{ 
+                      opacity: 1,
+                      scale: isZooming ? 2.5 : 1
+                    }}
+                    exit={{ opacity: 0 }}
+                    transition={{ 
+                      opacity: { duration: 0.2 },
+                      scale: { duration: 0.3, ease: "easeOut" }
+                    }}
+                    style={{ 
+                      transformOrigin: `${zoomPos.x}% ${zoomPos.y}%` 
+                    }}
+                    src={galleryImages[activeImageIndex]} 
+                    alt={product.name} 
+                    loading="eager"
+                    decoding="async"
+                    fetchPriority="high"
+                    className="w-full h-full object-contain object-center absolute inset-0 pointer-events-none"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : null}
               </AnimatePresence>
               {product.isHotSale && (
                 <div className="absolute top-4 left-4 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded uppercase tracking-wider z-10">
@@ -828,12 +830,16 @@ export default function ProductDetails() {
 
               {/* Chart Image */}
               <div className="flex-1 overflow-y-auto p-6 bg-gray-50/50 flex items-center justify-center">
-                <img
-                  src={sizeChartImageUrl}
-                  alt="Size Measurement Chart"
-                  className="max-h-[50vh] w-auto object-contain rounded-2xl border border-gray-100 bg-white"
-                  referrerPolicy="no-referrer"
-                />
+                {sizeChartImageUrl ? (
+                  <img
+                    src={sizeChartImageUrl}
+                    alt="Size Measurement Chart"
+                    className="max-h-[50vh] w-auto object-contain rounded-2xl border border-gray-100 bg-white"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <p className="text-xs text-gray-400 font-bold uppercase">No size chart image uploaded for this item.</p>
+                )}
               </div>
 
               {/* Footer info */}

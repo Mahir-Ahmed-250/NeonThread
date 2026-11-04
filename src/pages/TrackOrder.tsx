@@ -347,12 +347,14 @@ export default function TrackOrder() {
                       <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
                         <div className="flex -space-x-4 mb-3 overflow-hidden">
                           {order.items.slice(0, 4).map((item, i) => (
-                            <img 
-                              key={i} 
-                              src={item.image} 
-                              alt="" 
-                              className="w-16 h-16 rounded-2xl border-2 border-white dark:border-slate-800 object-cover bg-white shadow-md transition-transform group-hover:scale-110" 
-                            />
+                            item.image ? (
+                              <img 
+                                key={i} 
+                                src={item.image} 
+                                alt="" 
+                                className="w-16 h-16 rounded-2xl border-2 border-white dark:border-slate-800 object-cover bg-white shadow-md transition-transform group-hover:scale-110" 
+                              />
+                            ) : null
                           ))}
                           {order.items.length > 4 && (
                             <div className="w-16 h-16 rounded-2xl border-2 border-white dark:border-slate-800 bg-slate-200 dark:bg-slate-600 flex items-center justify-center text-xs font-black text-slate-500 shadow-md">
@@ -522,7 +524,9 @@ export default function TrackOrder() {
                         {selectedOrder.items.map((item, i) => (
                           <div key={i} className="flex flex-col sm:flex-row gap-4 sm:gap-6 p-4 sm:p-5 rounded-[2rem] bg-slate-50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 items-center justify-between w-full">
                             <div className="flex flex-col sm:flex-row items-center gap-4 sm:gap-6 flex-1 min-w-0 w-full">
-                              <img src={item.image} alt="" className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 object-cover rounded-[1.5rem] shadow-sm bg-white" />
+                              {item.image ? (
+                                <img src={item.image} alt="" className="w-20 h-20 sm:w-24 sm:h-24 md:w-32 md:h-32 object-cover rounded-[1.5rem] shadow-sm bg-white" />
+                              ) : null}
                               <div className="flex-1 min-w-0 text-center sm:text-left">
                                 <h4 className="font-black text-slate-900 dark:text-white uppercase truncate text-base sm:text-lg">{item.name}</h4>
                                 <div className="flex gap-2 mt-3 justify-center sm:justify-start">

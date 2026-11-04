@@ -161,9 +161,8 @@ async function readDb(forceFresh = false) {
         dbObj.admins = dbObj.admins.filter((a: any) => a.email !== 'admin@tbari.com');
         if (dbObj.admins.length < initialCount) {
           console.log("Cleanup: Removed forbidden admin email. Syncing to MongoDB...");
-          const mongo = await getMongoDb();
           if (mongo) {
-             await mongo.collection('admins').deleteMany({ email: 'admin@tbari.com' });
+             await mongo.collection('admins').updateMany({ email: 'admin@tbari.com' }, { $set: { isActive: false } });
           }
         }
       }
@@ -298,22 +297,9 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
           }
         }
 
-        // 3. Identify and add delete operations for missing documents
-        // Safeguard: Do not perform bulk deletes if the incoming data is empty 
-        // unless it's a small collection or explicitly allowed.
-        // This prevents accidental wipes of large collections due to client-side bugs.
-        const idsToDelete = (array.length === 0 && existingIds.length > 5) 
-          ? [] 
-          : existingIds.filter(id => !newDocIds.has(id));
+        // 3. Identification of missing documents for deletion is REMOVED to comply with the "Strict Additive-Only" rule.
+        // Data is never removed from the database; only soft-deletes (deleted: true) are performed by the client.
         
-        if (idsToDelete.length > 0) {
-          bulkOps.push({
-            deleteMany: {
-              filter: { _id: { $in: idsToDelete as any } }
-            }
-          });
-        }
-
         // 4. Execute all operations in a single bulk request
         if (bulkOps.length > 0) {
           await col.bulkWrite(bulkOps, { ordered: false });
@@ -515,13 +501,13 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
   app.get("/api/products", async (req, res) => {
     try {
       const db = await readDb();
-      if (!db || !db.products) return res.json([]);
-      
-      // Sanitize products to remove cost prices from public fetch
-      const sanitizedProducts = db.products.map((product: any) => {
-        const { costPrice, ...rest } = product;
-        return rest;
-      });
+      // Sanitize products to remove cost prices and filter out deleted products from public fetch
+      const sanitizedProducts = db.products
+        .filter((p: any) => !p.deleted)
+        .map((product: any) => {
+          const { costPrice, ...rest } = product;
+          return rest;
+        });
 
       res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=120");
       res.json(sanitizedProducts);
@@ -539,18 +525,32 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
       // Clone so we don't mutate memory cache directly
       const db: any = { ...rawDb };
       // SECURITY: Sanitize admins to remove passwords and products to remove cost prices from general fetch
-      if (db.admins) {
-        db.admins = db.admins.map((admin: any) => {
-          const { password, ...rest } = admin;
-          return rest;
-        });
-      }
       if (db.products) {
-        db.products = db.products.map((product: any) => {
+        db.products = db.products.filter((p: any) => !p.deleted).map((product: any) => {
           const { costPrice, ...rest } = product;
           return rest;
         });
       }
+      if (db.admins) {
+        db.admins = db.admins.filter((a: any) => a.isActive !== false).map((admin: any) => {
+          const { password, ...rest } = admin;
+          return rest;
+        });
+      }
+      // Apply filtering to other major collections too
+      if (db.faqs) db.faqs = db.faqs.filter((f: any) => !f.deleted);
+      if (db.policies) db.policies = db.policies.filter((p: any) => !p.deleted);
+      if (db.coupons) db.coupons = db.coupons.filter((c: any) => !c.deleted);
+      if (db.slides) db.slides = db.slides.filter((s: any) => !s.deleted);
+      if (db.orders) db.orders = db.orders.filter((o: any) => !o.deleted);
+      if (db.categories) db.categories = db.categories.filter((c: any) => !c.deleted);
+      if (db.reviews) db.reviews = db.reviews.filter((r: any) => !r.deleted);
+      if (db.subscribers) db.subscribers = db.subscribers.filter((s: any) => !s.deleted);
+      if (db.contactMessages) db.contactMessages = db.contactMessages.filter((m: any) => !m.deleted);
+      if (db.popupAds) db.popupAds = db.popupAds.filter((a: any) => !a.deleted);
+      if (db.homeAds) db.homeAds = db.homeAds.filter((a: any) => !a.deleted);
+      if (db.announcements) db.announcements = db.announcements.filter((a: any) => !a.deleted);
+      if (db.otps) db.otps = db.otps.filter((o: any) => !o.deleted);
 
       res.setHeader("Cache-Control", "public, max-age=10, stale-while-revalidate=30");
       res.json(db);
@@ -1097,22 +1097,44 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
   const distPath = path.join(process.cwd(), "dist");
   app.use(express.static(distPath));
   
-  app.get("*", (req, res, next) => {
-    if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-      if (viteInstance) {
-        viteInstance.middlewares(req, res, next);
+  app.get("*", async (req, res, next) => {
+    // If it's an API route that wasn't matched, it's a 404
+    if (req.path.startsWith("/api/")) {
+      return res.status(404).json({ error: "API route not found" });
+    }
+
+    try {
+      if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && viteInstance) {
+        const indexPath = path.join(process.cwd(), "index.html");
+        let template = await fs.readFile(indexPath, "utf-8");
+        template = await viteInstance.transformIndexHtml(req.originalUrl, template);
+        return res.status(200).set({ "Content-Type": "text/html" }).send(template);
+      } else if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+        return res.send("Loading Vite dev server...");
       } else {
-        res.send("Loading Vite dev server...");
+        return res.sendFile(path.join(distPath, "index.html"));
       }
-    } else {
-      res.sendFile(path.join(distPath, "index.html"));
+    } catch (err) {
+      next(err);
     }
   });
 
   if (!process.env.VERCEL) {
     const PORT = Number(process.env.PORT) || 3000;
-    app.listen(PORT, "0.0.0.0", () => {
+    const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
+    });
+    server.on("error", (err: any) => {
+      if (err.code === "EADDRINUSE") {
+        console.warn(`Port ${PORT} is in use, retrying on port ${PORT + 1}...`);
+        setTimeout(() => {
+          app.listen(PORT + 1, "0.0.0.0", () => {
+            console.log(`Server running on http://localhost:${PORT + 1}`);
+          });
+        }, 1000);
+      } else {
+        console.error("Server error:", err);
+      }
     });
   }
 

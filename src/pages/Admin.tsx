@@ -949,7 +949,7 @@ function AdminReviewsView() {
                       <td className="p-4">
                         {product ? (
                           <div className="flex items-center gap-2">
-                             <img src={product.image} className="w-8 h-8 rounded-lg object-cover" alt="" />
+                             {product.image && <img src={product.image} className="w-8 h-8 rounded-lg object-cover" alt="" />}
                              <span className="max-w-[150px] truncate">{product.name}</span>
                           </div>
                         ) : 'Unknown Product'}
@@ -1160,7 +1160,11 @@ function AdminPriceAnalysisView() {
                   <tr key={product.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="p-4">
                       <div className="flex items-center gap-3">
-                        <img src={product.image} alt={product.name} className="w-10 h-10 rounded-xl object-cover border border-gray-100" />
+                        {product.image ? (
+                          <img src={product.image} alt={product.name} className="w-10 h-10 rounded-xl object-cover border border-gray-100" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-xl bg-gray-100 border border-gray-100 flex items-center justify-center text-[10px] text-gray-400 font-bold">No img</div>
+                        )}
                         <div>
                           <p className="text-sm font-bold text-gray-900 leading-tight">{product.name}</p>
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">{product.code || 'NO-CODE'}</p>
@@ -4036,7 +4040,7 @@ export default function AdminDashboard() {
                 {bestSellingProducts.slice(0, 5).map((product, index) => (
                   <div key={product.id} className="bg-gray-50 p-4 rounded-2xl flex items-center gap-3 border border-gray-100 cursor-pointer hover:border-black transition-all" onClick={() => window.open(`/product/${product.id}`, '_blank')}>
                     <span className="text-xl font-black text-gray-300">#{index + 1}</span>
-                    <img src={product.image} alt={product.name} className="w-12 h-12 rounded-lg object-cover" />
+                    {product.image && <img src={product.image} alt={product.name} className="w-12 h-12 rounded-lg object-cover" />}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-gray-900 truncate">{product.name}</p>
                       <p className="text-[10px] text-gray-500 font-bold">{product.totalSold} Sold</p>
@@ -4556,7 +4560,7 @@ export default function AdminDashboard() {
                             {/* Thumbnail & Action Badges */}
                             <div className="flex sm:flex-col items-center gap-3 w-full sm:w-auto">
                               <div className={`w-24 h-32 rounded-2xl overflow-hidden border bg-white shadow-sm flex-shrink-0 relative group ${idx === 0 ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-gray-200'}`}>
-                                <img src={variant.image} alt="" className="w-full h-full object-cover" />
+                                {variant.image && <img src={variant.image} alt="" className="w-full h-full object-cover" />}
                                 <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                                   <Camera className="w-4 h-4 text-white" />
                                   <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e.target.files?.[0] || null, (url) => {
@@ -5006,7 +5010,7 @@ export default function AdminDashboard() {
                             {/* Thumbnail & Action Badges */}
                             <div className="flex sm:flex-col items-center gap-3 w-full sm:w-auto">
                               <div className={`w-24 h-32 rounded-2xl overflow-hidden border bg-white shadow-sm flex-shrink-0 relative group ${idx === 0 ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-gray-200'}`}>
-                                <img src={variant.image} alt="" className="w-full h-full object-cover" />
+                                {variant.image && <img src={variant.image} alt="" className="w-full h-full object-cover" />}
                                 <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                                   <Camera className="w-4 h-4 text-white" />
                                   <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e.target.files?.[0] || null, (url) => {
@@ -5234,7 +5238,7 @@ export default function AdminDashboard() {
                       <td className="p-4">{p.serial || 0}</td>
                       <td className="p-4">
                         <div className="flex items-center gap-4">
-                          <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />
+                          {p.image && <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
                           <div className="flex flex-col">
                             <span className="font-bold text-gray-900">{p.name}</span>
                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.category} • {p.code}</span>
@@ -5330,7 +5334,7 @@ export default function AdminDashboard() {
                       <td className="p-4">{p.serial || 0}</td>
                       <td className="p-4">
                         <div className="flex items-center gap-4">
-                          <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />
+                          {p.image && <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
                           <div className="flex flex-col">
                             <span className="font-bold text-gray-900 font-sans tracking-tight">{p.name}</span>
                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.category} • {p.code}</span>
@@ -6749,7 +6753,7 @@ export default function AdminDashboard() {
                   {slides.map(s => (
                     <tr key={s.id}>
                       <td className="p-4 flex items-center gap-3">
-                        <img src={s.image} className="w-16 h-10 rounded object-cover" alt="" />
+                        {s.image && <img src={s.image} className="w-16 h-10 rounded object-cover" alt="" />}
                         <span className="font-medium">{s.title}</span>
                       </td>
                       <td className="p-4">{s.subtitle}</td>
@@ -6953,7 +6957,7 @@ export default function AdminDashboard() {
                   {categoryBanners.map(c => (
                     <tr key={c.id}>
                       <td className="p-4 flex items-center gap-3">
-                        <img src={c.image} className="w-12 h-12 rounded object-cover" alt="" />
+                        {c.image && <img src={c.image} className="w-12 h-12 rounded object-cover" alt="" />}
                         <span className="font-medium whitespace-pre-line">{c.title}</span>
                       </td>
                       <td className="p-4">{c.subtitle}</td>
@@ -7122,7 +7126,7 @@ export default function AdminDashboard() {
                         <td className="p-4 font-black text-gray-900 text-sm">#{l.serial || 0}</td>
                         <td className="p-4 font-bold text-gray-800">{l.title || <span className="text-gray-300 font-normal">None</span>}</td>
                         <td className="p-4">
-                          <img src={l.image} className="w-16 h-16 rounded object-cover shadow-sm border border-gray-200" alt="" />
+                          {l.image && <img src={l.image} className="w-16 h-16 rounded object-cover shadow-sm border border-gray-200" alt="" />}
                         </td>
                         <td className="p-4 font-mono text-xs text-gray-600">{l.link || '/shop'}</td>
                         <td className="p-4 text-xs font-mono text-gray-400">{l.className || <span className="italic text-gray-300">Default (1x1)</span>}</td>
@@ -7435,7 +7439,7 @@ export default function AdminDashboard() {
                       {homeAds.map(ad => (
                         <tr key={ad.id}>
                           <td className="p-4">
-                            <img src={ad.imageUrl} className="w-24 h-14 rounded object-cover border border-gray-200" alt="" />
+                            {ad.imageUrl && <img src={ad.imageUrl} className="w-24 h-14 rounded object-cover border border-gray-200" alt="" />}
                           </td>
                           <td className="p-4">
                             <div className="font-bold text-gray-900">{ad.title || <span className="text-gray-400 font-normal italic">No Title</span>}</div>
@@ -7564,7 +7568,7 @@ export default function AdminDashboard() {
                       {popupAds.map(ad => (
                         <tr key={ad.id}>
                           <td className="p-4">
-                            <img src={ad.imageUrl} className="w-16 h-16 rounded object-cover border border-gray-200" alt="" />
+                            {ad.imageUrl && <img src={ad.imageUrl} className="w-16 h-16 rounded object-cover border border-gray-200" alt="" />}
                           </td>
                           <td className="p-4 font-mono text-xs">{ad.pages.join(', ')}</td>
                           <td className="p-4">{ad.isActive ? <span className="text-green-600 font-bold">Active</span> : <span className="text-red-500 font-bold">Inactive</span>}</td>

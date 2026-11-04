@@ -99,17 +99,17 @@ function AnimatedRoutes() {
 
 export default function App() {
   return (
-    <ToastProvider>
-      <ShopProvider>
-        <BrowserRouter>
+    <BrowserRouter>
+      <ToastProvider>
+        <ShopProvider>
           <LoadingBar />
           <ScrollToTop />
           <PageLoader />
           <PopupAdOverlay />
           <AnimatedRoutes />
-        </BrowserRouter>
-      </ShopProvider>
-    </ToastProvider>
+        </ShopProvider>
+      </ToastProvider>
+    </BrowserRouter>
   );
 }
 

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { ShoppingCart, Menu, X, Search, ChevronRight, Moon, Sun, UserCog, Heart } from 'lucide-react';
 import { useShop } from '../ShopContext';
 import { cn } from '../lib/utils';
@@ -8,6 +8,25 @@ import { motion, AnimatePresence } from 'motion/react';
 export default function Navbar() {
   const { cart, products, isDarkMode, toggleDarkMode, setIsCartOpen, isAdminAuth, wishlist } = useShop();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const navItems = [
+    { name: 'Home', path: '/' },
+    { name: 'Shop', path: '/shop' },
+    { name: 'Contact', path: '/contact' },
+    { name: 'Track Order', path: '/track-order' },
+  ];
+
+  const isActiveRoute = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/';
+    }
+    if (path === '/shop') {
+      return location.pathname.startsWith('/shop') || location.pathname.startsWith('/product');
+    }
+    return location.pathname.startsWith(path);
+  };
+
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
@@ -131,11 +150,31 @@ export default function Navbar() {
           </div>
  
           {/* Desktop Nav */}
-          <div className="hidden md:flex items-center space-x-12 lg:space-x-16 text-sm font-medium text-gray-500">
-            <Link to="/" className="text-black dark:text-white ml-10">Home</Link>
-            <Link to="/shop" className="hover:text-black dark:hover:text-white transition-colors">Shop</Link>
-            <Link to="/contact" className="hover:text-black dark:hover:text-white transition-colors">Contact</Link>
-            <Link to="/track-order" className="hover:text-black dark:hover:text-white transition-colors">Track Order</Link>
+          <div className="hidden md:flex items-center space-x-10 lg:space-x-14 ml-8 text-sm font-medium">
+            {navItems.map((item) => {
+              const active = isActiveRoute(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={cn(
+                    "relative py-1 flex items-center font-bold text-sm transition-colors",
+                    active 
+                      ? "text-black dark:text-white" 
+                      : "text-gray-500 hover:text-black dark:text-gray-400 dark:hover:text-white"
+                  )}
+                >
+                  <span>{item.name}</span>
+                  {active && (
+                    <motion.div
+                      layoutId="activeNavIndicator"
+                      className="absolute -bottom-1 left-0 right-0 h-[2.5px] bg-black dark:bg-white rounded-full shadow-sm"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                </Link>
+              );
+            })}
           </div>
  
           {/* Search */}
@@ -367,13 +406,45 @@ export default function Navbar() {
                   </div>
                 )}
               </div>
-              <Link to="/" onClick={() => setIsMobileMenuOpen(false)} className="block text-gray-800 dark:text-gray-200 font-bold py-2">Home</Link>
-              <Link to="/shop" onClick={() => setIsMobileMenuOpen(false)} className="block text-gray-800 dark:text-gray-200 font-bold py-2">Shop</Link>
-              <Link to="/contact" onClick={() => setIsMobileMenuOpen(false)} className="block text-gray-800 dark:text-gray-200 font-bold py-2">Contact</Link>
-              <Link to="/track-order" onClick={() => setIsMobileMenuOpen(false)} className="block text-gray-800 dark:text-gray-200 font-bold py-2">Track Order</Link>
-              {isAdminAuth && (
-                <Link to="/admin" onClick={() => setIsMobileMenuOpen(false)} className="block text-[10px] uppercase tracking-widest font-black text-gray-400 dark:text-gray-500 py-2">Admin Dashboard</Link>
-              )}
+              <div className="space-y-1">
+                {navItems.map((item) => {
+                  const active = isActiveRoute(item.path);
+                  return (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={() => setIsMobileMenuOpen(false)}
+                      className={cn(
+                        "block py-2.5 px-3 rounded-xl font-bold text-sm transition-all relative",
+                        active 
+                          ? "text-black dark:text-white bg-gray-100 dark:bg-gray-900" 
+                          : "text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-900"
+                      )}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span>{item.name}</span>
+                        {active && (
+                          <div className="w-6 h-[2.5px] bg-black dark:bg-white rounded-full" />
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+                {isAdminAuth && (
+                  <Link 
+                    to="/admin" 
+                    onClick={() => setIsMobileMenuOpen(false)} 
+                    className={cn(
+                      "block text-[10px] uppercase tracking-widest font-black py-2.5 px-3 rounded-xl transition-all",
+                      location.pathname.startsWith('/admin')
+                        ? "text-black dark:text-white bg-gray-100 dark:bg-gray-900"
+                        : "text-gray-400 dark:text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-900"
+                    )}
+                  >
+                    Admin Dashboard
+                  </Link>
+                )}
+              </div>
             </div>
           </motion.div>
         )}

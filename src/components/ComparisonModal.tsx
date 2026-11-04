@@ -108,7 +108,9 @@ export default function ComparisonModal({ isOpen, onClose }: { isOpen: boolean, 
                           </button>
                           <div className="flex flex-col items-center text-center">
                             <div className="w-32 h-32 rounded-xl overflow-hidden mb-4 bg-gray-50 dark:bg-gray-800">
-                              <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                              {product.image ? (
+                                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                              ) : null}
                             </div>
                             <Link to={`/product/${product.id}`} onClick={onClose} className="text-sm font-black uppercase tracking-tight text-gray-900 dark:text-white hover:text-blue-600 transition-colors line-clamp-2 min-h-[40px]">
                               {product.name}

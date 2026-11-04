@@ -62,14 +62,16 @@ export default function Home() {
                 className="absolute inset-0"
               >
                 <div className="absolute inset-0 bg-black/40 z-10" />
-                <img
-                  src={slide.image}
-                  alt={slide.title}
-                  loading={index === 0 ? "eager" : "lazy"}
-                  decoding="async"
-                  fetchPriority={index === 0 ? "high" : "auto"}
-                  className="w-full h-full object-cover object-center"
-                />
+                {slide.image ? (
+                  <img
+                    src={slide.image}
+                    alt={slide.title}
+                    loading={index === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                    fetchPriority={index === 0 ? "high" : "auto"}
+                    className="w-full h-full object-cover object-center"
+                  />
+                ) : null}
                 <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
                   <motion.span
                     initial={{ y: 20, opacity: 0 }}
@@ -172,13 +174,15 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {categoryBanners.map(banner => (
             <div key={banner.id} className="relative h-64 md:h-80 rounded-3xl overflow-hidden group">
-              <img 
-                src={banner.image} 
-                alt={banner.title} 
-                loading="lazy" 
-                decoding="async" 
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
-              />
+              {banner.image ? (
+                <img 
+                  src={banner.image} 
+                  alt={banner.title} 
+                  loading="lazy" 
+                  decoding="async" 
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                />
+              ) : null}
               <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors duration-500" />
               <div className="absolute inset-0 p-8 flex flex-col justify-end">
                 <span className="text-[10px] font-bold uppercase tracking-widest text-white/80 mb-2">{banner.subtitle}</span>
@@ -244,12 +248,14 @@ export default function Home() {
                 to={ad.linkUrl || "/shop"} 
                 className="relative block h-56 sm:h-64 rounded-3xl overflow-hidden group shadow-sm hover:shadow-lg transition-all duration-300 transform"
               >
-                <img 
-                  src={ad.imageUrl} 
-                  alt={ad.title || "Advertisement"} 
-                  className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-                  referrerPolicy="no-referrer"
-                />
+                {ad.imageUrl ? (
+                  <img 
+                    src={ad.imageUrl} 
+                    alt={ad.title || "Advertisement"} 
+                    className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                    referrerPolicy="no-referrer"
+                  />
+                ) : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
                 
                 <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8 z-20 flex flex-col justify-end text-white">
@@ -298,13 +304,15 @@ export default function Home() {
                   to={lb.link || "/shop"} 
                   className={`relative rounded-3xl overflow-hidden group ${lb.className || ''}`}
                 >
-                  <img 
-                    src={lb.image} 
-                    alt={lb.title || "Lookbook"} 
-                    loading="lazy" 
-                    decoding="async" 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
-                  />
+                  {lb.image ? (
+                    <img 
+                      src={lb.image} 
+                      alt={lb.title || "Lookbook"} 
+                      loading="lazy" 
+                      decoding="async" 
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                    />
+                  ) : null}
                   <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors duration-500" />
                   
                   {/* Title overlay */}

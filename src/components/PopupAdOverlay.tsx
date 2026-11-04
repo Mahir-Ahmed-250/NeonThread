@@ -16,9 +16,9 @@ export default function PopupAdOverlay() {
       return;
     }
 
-    // Find first active ad that targets this page
+    // Find first active ad that targets this page and has an image
     const ad = popupAds.find(a => 
-      a.isActive && (a.pages.includes('all') || a.pages.includes(location.pathname))
+      a.isActive && a.imageUrl && (a.pages.includes('all') || a.pages.includes(location.pathname))
     );
     
     // Check if we already showed it this session for this specific page

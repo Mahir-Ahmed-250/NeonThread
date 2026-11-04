@@ -334,12 +334,14 @@ export default function Checkout() {
               {cart.map(item => (
                 <div key={(item as any).cartItemId || (item.id + (item.selectedSize || 'M') + (item.image || ''))} className="flex gap-3 bg-gray-50 dark:bg-gray-800/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800 items-center justify-between">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <img
-                      src={item.image}
-                      alt={item.name}
-                      className="w-12 h-12 rounded-lg object-cover bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex-shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
+                    {item.image ? (
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-12 h-12 rounded-lg object-cover bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 flex-shrink-0"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : null}
                     <div className="flex-1 min-w-0">
                       <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate mb-1 uppercase">{item.name}</h4>
                       <div className="flex items-center gap-2">
