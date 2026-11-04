@@ -1097,6 +1097,18 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
   const distPath = path.join(process.cwd(), "dist");
   
   // Static files middleware - Serve assets from dist folder
+  app.use('/assets', express.static(path.join(distPath, 'assets'), {
+    maxAge: '1d',
+    etag: true,
+    setHeaders: (res, path) => {
+      if (path.endsWith('.js') || path.endsWith('.mjs')) {
+        res.setHeader('Content-Type', 'application/javascript');
+      } else if (path.endsWith('.css')) {
+        res.setHeader('Content-Type', 'text/css');
+      }
+    }
+  }));
+
   app.use(express.static(distPath, {
     maxAge: '1d',
     etag: true,
@@ -1105,8 +1117,6 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
         res.setHeader('Content-Type', 'application/javascript');
       } else if (path.endsWith('.css')) {
         res.setHeader('Content-Type', 'text/css');
-      } else if (path.endsWith('.png') || path.endsWith('.jpg') || path.endsWith('.jpeg')) {
-        res.setHeader('Content-Type', 'image/' + path.split('.').pop());
       }
     }
   }));
