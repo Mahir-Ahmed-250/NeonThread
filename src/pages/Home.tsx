@@ -6,7 +6,6 @@ import { useShop } from '../ShopContext';
 import ProductCard from '../components/ProductCard';
 import { ProductCardSkeleton } from '../components/Skeleton';
 import Swal from 'sweetalert2';
-import { ImageWithSkeleton } from '../components/ImageWithSkeleton';
 
 export default function Home() {
   const { products, slides, categoryBanners, lookbook, homeAds, addSubscriber } = useShop();
@@ -64,10 +63,12 @@ export default function Home() {
               >
                 <div className="absolute inset-0 bg-black/40 z-10" />
                 {slide.image ? (
-                  <ImageWithSkeleton
+                  <img
                     src={slide.image}
                     alt={slide.title}
                     loading={index === 0 ? "eager" : "lazy"}
+                    decoding="async"
+                    fetchPriority={index === 0 ? "high" : "auto"}
                     className="w-full h-full object-cover object-center"
                   />
                 ) : null}
@@ -174,9 +175,11 @@ export default function Home() {
           {categoryBanners.map(banner => (
             <div key={banner.id} className="relative h-64 md:h-80 rounded-3xl overflow-hidden group">
               {banner.image ? (
-                <ImageWithSkeleton 
+                <img 
                   src={banner.image} 
                   alt={banner.title} 
+                  loading="lazy" 
+                  decoding="async" 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                 />
               ) : null}
@@ -246,10 +249,11 @@ export default function Home() {
                 className="relative block h-56 sm:h-64 rounded-3xl overflow-hidden group shadow-sm hover:shadow-lg transition-all duration-300 transform"
               >
                 {ad.imageUrl ? (
-                  <ImageWithSkeleton
+                  <img 
                     src={ad.imageUrl} 
                     alt={ad.title || "Advertisement"} 
                     className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
+                    referrerPolicy="no-referrer"
                   />
                 ) : null}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
@@ -301,9 +305,11 @@ export default function Home() {
                   className={`relative rounded-3xl overflow-hidden group ${lb.className || ''}`}
                 >
                   {lb.image ? (
-                    <ImageWithSkeleton 
+                    <img 
                       src={lb.image} 
                       alt={lb.title || "Lookbook"} 
+                      loading="lazy" 
+                      decoding="async" 
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
                     />
                   ) : null}
