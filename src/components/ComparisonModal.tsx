@@ -3,7 +3,6 @@ import { X, ArrowLeftRight, ShoppingCart, Trash2 } from 'lucide-react';
 import { useShop } from '../ShopContext';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link, useNavigate } from 'react-router-dom';
-import { ImageWithSkeleton } from './ImageWithSkeleton';
 
 export default function ComparisonModal({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const { comparisonItems, products, toggleComparison, clearComparison, addToCart } = useShop();
@@ -110,7 +109,7 @@ export default function ComparisonModal({ isOpen, onClose }: { isOpen: boolean, 
                           <div className="flex flex-col items-center text-center">
                             <div className="w-32 h-32 rounded-xl overflow-hidden mb-4 bg-gray-50 dark:bg-gray-800">
                               {product.image ? (
-                                <ImageWithSkeleton src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
                               ) : null}
                             </div>
                             <Link to={`/product/${product.id}`} onClick={onClose} className="text-sm font-black uppercase tracking-tight text-gray-900 dark:text-white hover:text-blue-600 transition-colors line-clamp-2 min-h-[40px]">

@@ -7,7 +7,6 @@ import { useToast } from './Toast';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import QuickViewModal from './QuickViewModal';
-import { ImageWithSkeleton } from './ImageWithSkeleton';
 
 export default function ProductCard({ product }: { product: Product, key?: React.Key }) {
   const { addToCart, wishlist, toggleWishlist, reviews, cart, comparisonItems, toggleComparison } = useShop();
@@ -58,18 +57,14 @@ export default function ProductCard({ product }: { product: Product, key?: React
       }}
       className="bg-white dark:bg-gray-900 p-3 rounded-2xl flex flex-col border border-gray-100 dark:border-gray-800 group relative hover:shadow-xl hover:shadow-black/5 transition-shadow"
     >
-      <Link to={`/product/${product.id}`} className="aspect-square rounded-xl mb-3 flex items-center justify-center relative overflow-hidden block">
-        {product.image ? (
-          <ImageWithSkeleton
-            src={product.image}
-            alt={product.name}
-            className="w-full h-full group-hover:scale-105 transition-transform duration-500 absolute inset-0"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-gray-50 dark:bg-gray-800 text-gray-300">
-            <ShoppingCart size={24} className="opacity-20" />
-          </div>
-        )}
+      <Link to={`/product/${product.id}`} className="aspect-square bg-gray-100 dark:bg-gray-800 rounded-xl mb-3 flex items-center justify-center relative overflow-hidden block">
+        {product.image && <img
+          src={product.image}
+          alt={product.name}
+          loading="lazy"
+          decoding="async"
+          className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500 absolute inset-0"
+        />}
         {product.isHotSale && (
           <div className="absolute top-2 left-2 bg-red-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider z-10">
             Hot

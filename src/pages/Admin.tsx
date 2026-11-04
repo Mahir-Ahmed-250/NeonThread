@@ -7,7 +7,6 @@ import { Product, ProductImageVariant, Category, PopupAd, FAQItem, PolicyItem, H
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
 import { compressImage, fileToBase64 } from '../lib/imageUtils';
-import { ImageWithSkeleton } from '../components/ImageWithSkeleton';
 
 const SummaryCard = ({ title, count, icon: Icon, alert }: { title: string, count: number, icon: any, alert?: React.ReactNode }) => (
   <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4 relative overflow-hidden">
@@ -950,7 +949,7 @@ function AdminReviewsView() {
                       <td className="p-4">
                         {product ? (
                           <div className="flex items-center gap-2">
-                             {product.image && <ImageWithSkeleton src={product.image} className="w-8 h-8 rounded-lg object-cover" alt="" />}
+                             {product.image && <img src={product.image} className="w-8 h-8 rounded-lg object-cover" alt="" />}
                              <span className="max-w-[150px] truncate">{product.name}</span>
                           </div>
                         ) : 'Unknown Product'}
@@ -1162,7 +1161,7 @@ function AdminPriceAnalysisView() {
                     <td className="p-4">
                       <div className="flex items-center gap-3">
                         {product.image ? (
-                          <ImageWithSkeleton src={product.image} alt={product.name} className="w-10 h-10 rounded-xl object-cover border border-gray-100" />
+                          <img src={product.image} alt={product.name} className="w-10 h-10 rounded-xl object-cover border border-gray-100" />
                         ) : (
                           <div className="w-10 h-10 rounded-xl bg-gray-100 border border-gray-100 flex items-center justify-center text-[10px] text-gray-400 font-bold">No img</div>
                         )}
@@ -3162,7 +3161,7 @@ export default function AdminDashboard() {
                   className="mt-4 w-32 h-32 rounded-full border-2 border-gray-100 p-0.5 overflow-hidden shadow-sm"
                 >
                   {currentAdmin?.image ? (
-                    <ImageWithSkeleton src={currentAdmin.image} alt="Admin"  className="w-full h-full object-cover rounded-full" />
+                    <img src={currentAdmin.image} alt="Admin"  className="w-full h-full object-cover rounded-full" />
                   ) : (
                     <div className="w-full h-full bg-gray-50 flex items-center justify-center text-gray-300">
                       <UserCircle className="w-8 h-8" />
@@ -3772,7 +3771,7 @@ export default function AdminDashboard() {
                                     }}
                                     className="p-3.5 rounded-2xl hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer transition-all flex items-center gap-3 bg-white dark:bg-gray-900 border border-transparent"
                                   >
-                                    <ImageWithSkeleton 
+                                    <img 
                                       src={p.image} 
                                       alt={p.name} 
                                       className="w-10 h-10 rounded-lg object-cover bg-gray-50 border border-gray-100 dark:border-gray-800 shrink-0" 
@@ -4041,7 +4040,7 @@ export default function AdminDashboard() {
                 {bestSellingProducts.slice(0, 5).map((product, index) => (
                   <div key={product.id} className="bg-gray-50 p-4 rounded-2xl flex items-center gap-3 border border-gray-100 cursor-pointer hover:border-black transition-all" onClick={() => window.open(`/product/${product.id}`, '_blank')}>
                     <span className="text-xl font-black text-gray-300">#{index + 1}</span>
-                    {product.image && <ImageWithSkeleton src={product.image} alt={product.name} className="w-12 h-12 rounded-lg object-cover" />}
+                    {product.image && <img src={product.image} alt={product.name} className="w-12 h-12 rounded-lg object-cover" />}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-bold text-gray-900 truncate">{product.name}</p>
                       <p className="text-[10px] text-gray-500 font-bold">{product.totalSold} Sold</p>
@@ -4111,7 +4110,7 @@ export default function AdminDashboard() {
                 <div className="relative group">
                   <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-gray-50 bg-gray-100 flex items-center justify-center">
                     {currentAdmin.image ? (
-                      <ImageWithSkeleton src={currentAdmin.image} alt={currentAdmin.name || currentAdmin.email} className="w-full h-full object-cover" />
+                      <img src={currentAdmin.image} alt={currentAdmin.name || currentAdmin.email} className="w-full h-full object-cover" />
                     ) : (
                       <UserCircle className="w-16 h-16 text-gray-300" />
                     )}
@@ -4373,7 +4372,7 @@ export default function AdminDashboard() {
                       /* High-Fidelity Front Image Preview Card */
                       <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
                         <div className="relative w-40 h-52 sm:w-44 sm:h-56 rounded-2xl overflow-hidden border-2 border-amber-300 bg-gray-100 shadow-md group shrink-0">
-                          <ImageWithSkeleton src={newProduct.image} alt="Front Cover" className="w-full h-full object-cover" />
+                          <img src={newProduct.image} alt="Front Cover" className="w-full h-full object-cover" />
                           <div className="absolute top-2 left-2 bg-black/85 backdrop-blur-md text-yellow-300 text-[9px] font-black uppercase px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-sm">
                             <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> সামনের ছবি
                           </div>
@@ -4561,7 +4560,7 @@ export default function AdminDashboard() {
                             {/* Thumbnail & Action Badges */}
                             <div className="flex sm:flex-col items-center gap-3 w-full sm:w-auto">
                               <div className={`w-24 h-32 rounded-2xl overflow-hidden border bg-white shadow-sm flex-shrink-0 relative group ${idx === 0 ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-gray-200'}`}>
-                                {variant.image && <ImageWithSkeleton src={variant.image} alt="" className="w-full h-full object-cover" />}
+                                {variant.image && <img src={variant.image} alt="" className="w-full h-full object-cover" />}
                                 <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                                   <Camera className="w-4 h-4 text-white" />
                                   <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e.target.files?.[0] || null, (url) => {
@@ -4666,7 +4665,7 @@ export default function AdminDashboard() {
                     </div>
                     {newProduct.sizeChartImage && (
                       <div className="mt-4 rounded-2xl border-2 border-gray-100 overflow-hidden bg-white relative group inline-block">
-                         <ImageWithSkeleton src={newProduct.sizeChartImage} alt="Size Chart" className="h-32 object-contain p-2" />
+                         <img src={newProduct.sizeChartImage} alt="Size Chart" className="h-32 object-contain p-2" />
                          <button type="button" onClick={() => setNewProduct({...newProduct, sizeChartImage: ''})} className="absolute top-2 right-2 p-1.5 bg-red-50 hover:bg-red-500 hover:text-white rounded-lg text-red-500 opacity-0 group-hover:opacity-100 transition-all border border-red-100">
                            <X className="w-3.5 h-3.5" />
                          </button>
@@ -4823,7 +4822,7 @@ export default function AdminDashboard() {
                       /* High-Fidelity Front Image Preview Card */
                       <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6 bg-white p-5 rounded-2xl border border-gray-200 shadow-xs">
                         <div className="relative w-40 h-52 sm:w-44 sm:h-56 rounded-2xl overflow-hidden border-2 border-amber-300 bg-gray-100 shadow-md group shrink-0">
-                          <ImageWithSkeleton src={editingProduct.image} alt="Front Cover" className="w-full h-full object-cover" />
+                          <img src={editingProduct.image} alt="Front Cover" className="w-full h-full object-cover" />
                           <div className="absolute top-2 left-2 bg-black/85 backdrop-blur-md text-yellow-300 text-[9px] font-black uppercase px-2.5 py-1 rounded-lg flex items-center gap-1 shadow-sm">
                             <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" /> সামনের ছবি
                           </div>
@@ -5011,7 +5010,7 @@ export default function AdminDashboard() {
                             {/* Thumbnail & Action Badges */}
                             <div className="flex sm:flex-col items-center gap-3 w-full sm:w-auto">
                               <div className={`w-24 h-32 rounded-2xl overflow-hidden border bg-white shadow-sm flex-shrink-0 relative group ${idx === 0 ? 'border-amber-400 ring-2 ring-amber-400/30' : 'border-gray-200'}`}>
-                                {variant.image && <ImageWithSkeleton src={variant.image} alt="" className="w-full h-full object-cover" />}
+                                {variant.image && <img src={variant.image} alt="" className="w-full h-full object-cover" />}
                                 <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
                                   <Camera className="w-4 h-4 text-white" />
                                   <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e.target.files?.[0] || null, (url) => {
@@ -5116,7 +5115,7 @@ export default function AdminDashboard() {
                     </div>
                     {editingProduct.sizeChartImage && (
                       <div className="mt-4 rounded-2xl border-2 border-gray-100 overflow-hidden bg-white relative group inline-block">
-                         <ImageWithSkeleton src={editingProduct.sizeChartImage} alt="Size Chart" className="h-32 object-contain p-2" />
+                         <img src={editingProduct.sizeChartImage} alt="Size Chart" className="h-32 object-contain p-2" />
                          <button type="button" onClick={() => setEditingProduct({...editingProduct, sizeChartImage: ''})} className="absolute top-2 right-2 p-1.5 bg-red-50 hover:bg-red-500 hover:text-white rounded-lg text-red-500 opacity-0 group-hover:opacity-100 transition-all border border-red-100">
                            <X className="w-3.5 h-3.5" />
                          </button>
@@ -5239,7 +5238,7 @@ export default function AdminDashboard() {
                       <td className="p-4">{p.serial || 0}</td>
                       <td className="p-4">
                         <div className="flex items-center gap-4">
-                          {p.image && <ImageWithSkeleton src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
+                          {p.image && <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
                           <div className="flex flex-col">
                             <span className="font-bold text-gray-900">{p.name}</span>
                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.category} • {p.code}</span>
@@ -5335,7 +5334,7 @@ export default function AdminDashboard() {
                       <td className="p-4">{p.serial || 0}</td>
                       <td className="p-4">
                         <div className="flex items-center gap-4">
-                          {p.image && <ImageWithSkeleton src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
+                          {p.image && <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
                           <div className="flex flex-col">
                             <span className="font-bold text-gray-900 font-sans tracking-tight">{p.name}</span>
                             <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.category} • {p.code}</span>
@@ -5725,7 +5724,7 @@ export default function AdminDashboard() {
                                 <td className="py-4 px-4">
                                   <div className="flex -space-x-3 overflow-hidden">
                                     {order.items.slice(0, 3).map((item, i) => (
-                                      <ImageWithSkeleton 
+                                      <img 
                                         key={i} 
                                         src={item.image} 
                                         className="w-8 h-8 rounded-lg border-2 border-white dark:border-gray-950 object-cover shadow bg-white shrink-0" 
@@ -6016,7 +6015,7 @@ export default function AdminDashboard() {
                               <div className="space-y-4">
                                 {orderToDisplay?.items.map((item, idx) => (
                                   <div key={idx} className="flex flex-col md:flex-row gap-6 p-5 rounded-[2rem] border border-gray-100 hover:border-gray-250 transition-colors bg-gray-50/30">
-                                    <ImageWithSkeleton src={item.image} alt={item.name} className="w-24 h-24 object-cover rounded-[1.5rem] shadow-md bg-white shrink-0 mx-auto md:mx-0" />
+                                    <img src={item.image} alt={item.name} className="w-24 h-24 object-cover rounded-[1.5rem] shadow-md bg-white shrink-0 mx-auto md:mx-0" />
                                     <div className="flex-1 flex flex-col justify-center min-w-0">
                                       <div className="flex justify-between items-start">
                                         <h4 className="font-black text-gray-900 group-hover:text-blue-600 transition-colors truncate text-lg uppercase">{item.name}</h4>
@@ -6138,7 +6137,7 @@ export default function AdminDashboard() {
                                               setProductSearchQuery(p.name);
                                               setSelectedProductToAdd(p.id);
                                             }}>
-                                              {p.image && <ImageWithSkeleton src={p.image} alt={p.name} className="w-8 h-8 object-cover rounded" />}
+                                              {p.image && <img src={p.image} alt={p.name} className="w-8 h-8 object-cover rounded" />}
                                               <span className="font-bold">{p.name}</span> {p.code ? <span className="text-[10px] text-gray-500">[{p.code}]</span> : ''}
                                             </li>
                                           ))}
@@ -6673,7 +6672,7 @@ export default function AdminDashboard() {
                   <div className="w-full md:w-2/5 flex flex-col gap-4">
                     <div className="aspect-[4/5] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200">
                       {newSlide.image ? (
-                        <ImageWithSkeleton src={newSlide.image} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={newSlide.image} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">
                           <Image className="h-12 w-12 opacity-50" />
@@ -6754,7 +6753,7 @@ export default function AdminDashboard() {
                   {slides.map(s => (
                     <tr key={s.id}>
                       <td className="p-4 flex items-center gap-3">
-                        {s.image && <ImageWithSkeleton src={s.image} className="w-16 h-10 rounded object-cover" alt="" />}
+                        {s.image && <img src={s.image} className="w-16 h-10 rounded object-cover" alt="" />}
                         <span className="font-medium">{s.title}</span>
                       </td>
                       <td className="p-4">{s.subtitle}</td>
@@ -6813,7 +6812,7 @@ export default function AdminDashboard() {
                   <div className="w-full md:w-2/5 flex flex-col gap-4">
                     <div className="aspect-[4/5] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200">
                       {newCategoryBanner.image ? (
-                        <ImageWithSkeleton src={newCategoryBanner.image} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={newCategoryBanner.image} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">
                           <Image className="h-12 w-12 opacity-50" />
@@ -6886,7 +6885,7 @@ export default function AdminDashboard() {
                   <div className="w-full md:w-2/5 flex flex-col gap-4">
                     <div className="aspect-[4/5] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200">
                       {editingCategoryBanner.image ? (
-                        <ImageWithSkeleton src={editingCategoryBanner.image} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={editingCategoryBanner.image} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">
                           <Image className="h-12 w-12 opacity-50" />
@@ -6958,7 +6957,7 @@ export default function AdminDashboard() {
                   {categoryBanners.map(c => (
                     <tr key={c.id}>
                       <td className="p-4 flex items-center gap-3">
-                        {c.image && <ImageWithSkeleton src={c.image} className="w-12 h-12 rounded object-cover" alt="" />}
+                        {c.image && <img src={c.image} className="w-12 h-12 rounded object-cover" alt="" />}
                         <span className="font-medium whitespace-pre-line">{c.title}</span>
                       </td>
                       <td className="p-4">{c.subtitle}</td>
@@ -7015,7 +7014,7 @@ export default function AdminDashboard() {
                   <div className="w-full md:w-2/5 flex flex-col gap-4">
                     <div className="aspect-[4/5] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200 shadow-inner">
                       {newLookbook.image ? (
-                        <ImageWithSkeleton src={newLookbook.image} alt="Preview" className="w-full h-full object-cover" />
+                        <img src={newLookbook.image} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-gray-400">
                           <Image className="h-12 w-12 opacity-50" />
@@ -7160,7 +7159,7 @@ export default function AdminDashboard() {
                         <td className="p-4 font-black text-gray-900 text-sm">#{l.serial || 0}</td>
                         <td className="p-4 font-bold text-gray-800">{l.title || <span className="text-gray-300 font-normal">None</span>}</td>
                         <td className="p-4">
-                          {l.image && <ImageWithSkeleton src={l.image} className="w-16 h-16 rounded object-cover shadow-sm border border-gray-200" alt="" />}
+                          {l.image && <img src={l.image} className="w-16 h-16 rounded object-cover shadow-sm border border-gray-200" alt="" />}
                         </td>
                         <td className="p-4 font-mono text-xs text-gray-600">{l.link || '/shop'}</td>
                         <td className="p-4 text-xs font-mono text-gray-400">
@@ -7407,7 +7406,7 @@ export default function AdminDashboard() {
                       <div className="w-full md:w-2/5 flex flex-col gap-4">
                         <div className="aspect-[16/9] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200">
                           {newHomeAd.imageUrl ? (
-                            <ImageWithSkeleton src={newHomeAd.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                            <img src={newHomeAd.imageUrl} alt="Preview" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">
                               <Image className="h-12 w-12 opacity-50" />
@@ -7496,7 +7495,7 @@ export default function AdminDashboard() {
                       {homeAds.map(ad => (
                         <tr key={ad.id}>
                           <td className="p-4">
-                            {ad.imageUrl && <ImageWithSkeleton src={ad.imageUrl} className="w-24 h-14 rounded object-cover border border-gray-200" alt="" />}
+                            {ad.imageUrl && <img src={ad.imageUrl} className="w-24 h-14 rounded object-cover border border-gray-200" alt="" />}
                           </td>
                           <td className="p-4">
                             <div className="font-bold text-gray-900">{ad.title || <span className="text-gray-400 font-normal italic">No Title</span>}</div>
@@ -7565,7 +7564,7 @@ export default function AdminDashboard() {
                       <div className="w-full md:w-2/5 flex flex-col gap-4">
                         <div className="aspect-[4/5] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200">
                           {newPopupAd.imageUrl ? (
-                            <ImageWithSkeleton src={newPopupAd.imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                            <img src={newPopupAd.imageUrl} alt="Preview" className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center text-gray-400">
                               <Image className="h-12 w-12 opacity-50" />
@@ -7625,7 +7624,7 @@ export default function AdminDashboard() {
                       {popupAds.map(ad => (
                         <tr key={ad.id}>
                           <td className="p-4">
-                            {ad.imageUrl && <ImageWithSkeleton src={ad.imageUrl} className="w-16 h-16 rounded object-cover border border-gray-200" alt="" />}
+                            {ad.imageUrl && <img src={ad.imageUrl} className="w-16 h-16 rounded object-cover border border-gray-200" alt="" />}
                           </td>
                           <td className="p-4 font-mono text-xs">{ad.pages.join(', ')}</td>
                           <td className="p-4">{ad.isActive ? <span className="text-green-600 font-bold">Active</span> : <span className="text-red-500 font-bold">Inactive</span>}</td>
@@ -8382,7 +8381,7 @@ export default function AdminDashboard() {
                   {emailModalType === 'newsletter' && (
                     newsletterImage ? (
                       <div className="w-full h-40 rounded-xl overflow-hidden mb-4 shrink-0">
-                         <ImageWithSkeleton src={newsletterImage} alt="Newsletter Banner" className="w-full h-full object-cover" />
+                         <img src={newsletterImage} alt="Newsletter Banner" className="w-full h-full object-cover" />
                       </div>
                     ) : (
                       <div className="w-full h-40 rounded-xl bg-gray-100 flex flex-col items-center justify-center text-gray-400 mb-4 shrink-0">
