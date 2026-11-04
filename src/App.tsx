@@ -71,25 +71,38 @@ function AnimatedRoutes() {
   }
 
   return (
-    <Suspense fallback={<div className="flex-1" />}>
+    <Suspense fallback={<div className="flex-1 bg-white" />}>
       <AnimatePresence mode="wait">
-        <motion.div key={location.pathname}>
+        <motion.div
+          key={location.pathname}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+          className="flex-1 flex flex-col min-h-0"
+        >
           <Routes location={location}>
             <Route path="/" element={<RootLayout />}>
-              <Route index element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><Home /></motion.div>} />
-              <Route path="shop" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><Shop /></motion.div>} />
-              <Route path="product/:id" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><ProductDetails /></motion.div>} />
-              <Route path="checkout" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><Checkout /></motion.div>} />
-              <Route path="contact" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><Contact /></motion.div>} />
-              <Route path="track-order" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><TrackOrder /></motion.div>} />
-              <Route path="faq" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><FAQ /></motion.div>} />
-              <Route path="policies" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><Policies /></motion.div>} />
-              <Route path="shipping-policy" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><ShippingPolicy /></motion.div>} />
-              <Route path="privacy-policy" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><PrivacyPolicy /></motion.div>} />
-              <Route path="wishlist" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><Wishlist /></motion.div>} />
-              <Route path="*" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }}><NotFound /></motion.div>} />
+              <Route index element={<Home />} />
+              <Route path="shop" element={<Shop />} />
+              <Route path="product/:id" element={<ProductDetails />} />
+              <Route path="checkout" element={<Checkout />} />
+              <Route path="contact" element={<Contact />} />
+              <Route path="track-order" element={<TrackOrder />} />
+              <Route path="faq" element={<FAQ />} />
+              <Route path="policies" element={<Policies />} />
+              <Route path="shipping-policy" element={<ShippingPolicy />} />
+              <Route path="privacy-policy" element={<PrivacyPolicy />} />
+              <Route path="wishlist" element={<Wishlist />} />
+              <Route path="*" element={<NotFound />} />
             </Route>
-            <Route path="/admin" element={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} className="flex flex-col min-h-screen bg-white transition-colors duration-300"><header className="sticky top-0 z-[100]"><AnnouncementBar /><Navbar /></header><Breadcrumbs /><div className="flex-1 flex min-h-0"><AdminDashboard /></div></motion.div>} />
+            <Route path="/admin" element={
+              <div className="flex-1 flex flex-col min-h-screen bg-white">
+                <header className="sticky top-0 z-[100]"><AnnouncementBar /><Navbar /></header>
+                <Breadcrumbs />
+                <div className="flex-1 flex min-h-0"><AdminDashboard /></div>
+              </div>
+            } />
           </Routes>
         </motion.div>
       </AnimatePresence>
