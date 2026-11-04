@@ -1140,19 +1140,16 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
         const indexPath = path.join(process.cwd(), "index.html");
         let template = await fs.readFile(indexPath, "utf-8");
         template = await viteInstance.transformIndexHtml(req.originalUrl, template);
-        res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
         return res.status(200).set({ "Content-Type": "text/html" }).send(template);
       } else {
         const indexPath = path.join(distPath, "index.html");
         try {
           await fs.access(indexPath);
-          res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
           return res.sendFile(indexPath);
         } catch (e) {
           // Fallback if dist/index.html is missing
           if (process.env.NODE_ENV !== "production") {
              const rootIndexPath = path.join(process.cwd(), "index.html");
-             res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
              return res.sendFile(rootIndexPath);
           }
           return res.status(404).send("Frontend not built");
