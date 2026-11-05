@@ -2861,26 +2861,50 @@ export default function AdminDashboard() {
   };
 
   const openEditProductModal = (p: Product) => {
-    let variants = p.imageVariants ? [...p.imageVariants] : [];
-    if (variants.length === 0) {
-      const allImgs = Array.from(new Set([p.image, ...(p.images || [])].filter(Boolean)));
-      if (allImgs.length > 0) {
-        variants = allImgs.map((img, idx) => ({
-          id: `var-edit-${Date.now()}-${idx}`,
-          image: img,
-          title: `Variant ${idx + 1}`,
-          sizeStocks: { ...(p.sizeStocks || { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 }) },
-          stock: Object.values(p.sizeStocks || {}).reduce((s, c) => s + (Number(c) || 0), 0) || p.stock || 0
-        }));
+    const buildVariants = (prod: Product) => {
+      let variants = prod.imageVariants ? [...prod.imageVariants] : [];
+      if (variants.length === 0) {
+        const allImgs = Array.from(new Set([prod.image, ...(prod.images || [])].filter(Boolean)));
+        if (allImgs.length > 0) {
+          variants = allImgs.map((img, idx) => ({
+            id: `var-edit-${Date.now()}-${idx}`,
+            image: img,
+            title: `Variant ${idx + 1}`,
+            sizeStocks: { ...(prod.sizeStocks || { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 }) },
+            stock: Object.values(prod.sizeStocks || {}).reduce((s, c) => s + (Number(c) || 0), 0) || prod.stock || 0
+          }));
+        }
       }
-    }
+      return variants;
+    };
+
     setEditingProduct({
       ...p,
-      imageVariants: variants
+      imageVariants: buildVariants(p)
     });
     setEditProductUrlInput('');
     setEditFrontImageUrlInput('');
     setIsAddingProduct(false);
+
+    // Hydrate full gallery & variants on-demand from server
+    if (!p.imageVariants || p.imageVariants.length === 0) {
+      fetch(`/api/admin/products/${p.id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then((fullProd: Product | null) => {
+          if (fullProd && fullProd.id === p.id) {
+            setEditingProduct(prev => {
+              if (!prev || prev.id !== p.id) return prev;
+              return {
+                ...prev,
+                images: fullProd.images || prev.images,
+                sizeChartImage: fullProd.sizeChartImage || prev.sizeChartImage,
+                imageVariants: buildVariants(fullProd)
+              };
+            });
+          }
+        })
+        .catch(() => {});
+    }
   };
 
   const handleAddProduct = (e: React.FormEvent) => {

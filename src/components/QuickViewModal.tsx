@@ -18,10 +18,34 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClos
   const [isImageLoading, setIsImageLoading] = useState(true);
   const navigate = useNavigate();
 
+  const [fullProduct, setFullProduct] = useState<Product | null>(product);
+
+  useEffect(() => {
+    setFullProduct(product);
+    if (isOpen && product?.id && (!product.images || product.images.length === 0)) {
+      let isMounted = true;
+      fetch(`/api/products/${product.id}`)
+        .then(res => res.ok ? res.json() : null)
+        .then(data => {
+          if (isMounted && data && data.id === product.id) {
+            setFullProduct(data);
+          }
+        })
+        .catch(() => {});
+      return () => { isMounted = false; };
+    }
+  }, [product, isOpen]);
+
+  const activeProduct = fullProduct || product;
+
   const images = React.useMemo(() => {
-    if (!product) return [];
-    return Array.from(new Set([product.image, ...(product.images || [])])).filter(Boolean);
-  }, [product?.id]);
+    if (!activeProduct) return [];
+    return Array.from(new Set([
+      activeProduct.image,
+      ...(activeProduct.images || []),
+      ...(activeProduct.imageVariants?.map(v => v.image) || [])
+    ])).filter(Boolean);
+  }, [activeProduct]);
 
   // Reset index when modal opens
   useEffect(() => {

@@ -456,15 +456,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, 1200);
 
     const fetchDb = async () => {
+      const controller = new AbortController();
+      const abortTimer = setTimeout(() => controller.abort(), 8000);
+
       try {
         let currentToken = authToken;
         let endpoint = currentToken ? '/api/admin/db' : '/api/db';
         let options: RequestInit = currentToken ? {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: currentToken })
+          body: JSON.stringify({ token: currentToken }),
+          signal: controller.signal
         } : {
-          method: 'GET'
+          method: 'GET',
+          signal: controller.signal
         };
 
         let res = await fetch(endpoint, options);
@@ -479,9 +484,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Retry with public db endpoint
           endpoint = '/api/db';
-          options = { method: 'GET' };
+          options = { method: 'GET', signal: controller.signal };
           res = await fetch(endpoint, options);
         }
+
+        clearTimeout(abortTimer);
 
         if (!res.ok) {
           throw new Error(`Server responded with ${res.status}`);
@@ -530,12 +537,19 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (normalizedDbData.reviews) setReviews(normalizedDbData.reviews);
             if (normalizedDbData.maintenance_mode !== undefined) setIsMaintenanceMode(normalizedDbData.maintenance_mode);
             try {
-              if (normalizedDbData.products) localStorage.setItem('ts_products', JSON.stringify(normalizedDbData.products));
               if (normalizedDbData.categories) localStorage.setItem('ts_categories', JSON.stringify(normalizedDbData.categories));
               if (normalizedDbData.slides) localStorage.setItem('ts_slides', JSON.stringify(normalizedDbData.slides));
               if (normalizedDbData.categoryBanners) localStorage.setItem('ts_category_banners', JSON.stringify(normalizedDbData.categoryBanners));
               if (normalizedDbData.lookbook) localStorage.setItem('ts_lookbook', JSON.stringify(normalizedDbData.lookbook));
               if (normalizedDbData.homeAds) localStorage.setItem('ts_home_ads', JSON.stringify(normalizedDbData.homeAds));
+              if (normalizedDbData.products) {
+                // Save lightweight product list in localStorage so it fits within 5MB browser quota
+                const liteProducts = normalizedDbData.products.map((p: any) => {
+                  const { images, imageVariants, sizeChartImage, ...lite } = p;
+                  return lite;
+                });
+                localStorage.setItem('ts_products', JSON.stringify(liteProducts));
+              }
             } catch (_) {}
           } else if (products.length > 0 || (currentToken && admins.length > 1)) {
              // Server is empty but client has data -> Initialize server
@@ -583,7 +597,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => clearTimeout(safetyTimer);
   }, [authToken]);
 
-  // Custom hook to prevent syncing on the first load of isDbLoaded
+  // Custom hook to prevent syncing on the first load of isDbLoaded and only sync changed items
   function useServerSync(key: string, data: any, storageKey: string) {
     const previousDataRef = React.useRef(data);
     const hasInitializedRef = React.useRef(false);
@@ -600,10 +614,25 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Only save if the data actually changed from the previous state and user is admin
-      if (isAdminAuth && JSON.stringify(previousDataRef.current) !== JSON.stringify(data)) {
+      // Only save if reference changed and user is admin
+      if (isAdminAuth && previousDataRef.current !== data) {
+        const prev = previousDataRef.current;
         previousDataRef.current = data;
-        serverSave(key, data);
+
+        // If it's an array of items with IDs, only send the modified/added items instead of re-uploading all 70MB!
+        if (Array.isArray(data) && Array.isArray(prev)) {
+          const prevMap = new Map(prev.map((item: any) => [item?.id, item]));
+          const changedItems = data.filter((item: any) => {
+            if (!item || !item.id) return true;
+            const prevItem = prevMap.get(item.id);
+            return prevItem !== item;
+          });
+          if (changedItems.length > 0) {
+            serverSave(key, changedItems);
+          }
+        } else {
+          serverSave(key, data);
+        }
       }
     }, [data, isDbLoaded, key, storageKey, isAdminAuth]);
   }
@@ -886,6 +915,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const size = selectedSize || 'M';
     const priceForSize = getProductPriceForSize(product, size);
     const itemImage = product.image || '';
+    const { images, imageVariants, sizeChartImage, ...liteProduct } = product;
     
     // User requested that same product added multiple times should appear as separate lines in checkout
     // So we generate a unique ID for each "add" event.
@@ -907,10 +937,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return prev;
         }
         // Add up to stock
-        return [...prev, { ...product, price: priceForSize, quantity: allowedAdd, selectedSize: size, image: itemImage, cartItemId }];
+        return [...prev, { ...liteProduct, price: priceForSize, quantity: allowedAdd, selectedSize: size, image: itemImage, cartItemId }];
       }
 
-      return [...prev, { ...product, price: priceForSize, quantity, selectedSize: size, image: itemImage, cartItemId }];
+      return [...prev, { ...liteProduct, price: priceForSize, quantity, selectedSize: size, image: itemImage, cartItemId }];
     });
   };
 

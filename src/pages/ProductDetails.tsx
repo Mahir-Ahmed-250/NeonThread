@@ -69,7 +69,28 @@ export default function ProductDetails() {
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState('');
 
-  const product = products.find(p => p.id === id);
+  const baseProduct = products.find(p => p.id === id);
+  const [detailedProduct, setDetailedProduct] = useState<typeof baseProduct>(undefined);
+
+  useEffect(() => {
+    setDetailedProduct(undefined);
+    setActiveImageIndex(0);
+    if (!id) return;
+    let isMounted = true;
+    fetch(`/api/products/${id}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (isMounted && data && data.id === id) {
+          setDetailedProduct(data);
+        }
+      })
+      .catch(() => {});
+    return () => { isMounted = false; };
+  }, [id]);
+
+  const product = detailedProduct && detailedProduct.id === id
+    ? { ...baseProduct, ...detailedProduct }
+    : baseProduct;
 
   const currentPrice = useMemo(() => {
     if (!product) return 0;
