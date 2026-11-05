@@ -208,6 +208,7 @@ let cachedPublicDb: any = null;
 let cachedPublicDbTime = 0;
 let cachedAdminDb: any = null;
 let cachedAdminDbTime = 0;
+const singleProductCache = new Map<string, { data: any; time: number }>();
 let memoryDbCache: any = null;
 let memoryCacheTimestamp = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache for fast response times
@@ -217,13 +218,15 @@ let pendingMongoFetchPromise: Promise<any> | null = null;
 async function saveDiskCacheSnapshot(dbObj: any) {
   try {
     if (!dbObj || typeof dbObj !== 'object') return;
-    await fs.writeFile(DB_FILE, JSON.stringify(dbObj, null, 2), "utf-8");
+    // Save lightweight sanitized snapshot (< 5MB) to disk so we never block the event loop or exceed 512MB RAM on Render
+    const liteSnapshot = sanitizeAdminDb(dbObj);
+    await fs.writeFile(DB_FILE, JSON.stringify(liteSnapshot), "utf-8");
   } catch (err) {
     // Non-fatal disk cache write notice
   }
 }
 
-// Fetch all collections in parallel from MongoDB with safe query timeout
+// Fetch all collections in parallel from MongoDB with safe query timeout and projection to prevent 512MB RAM OOM on Render
 async function fetchMongoData(): Promise<any | null> {
   const mongo = await getMongoDb();
   if (!mongo) return null;
@@ -236,7 +239,14 @@ async function fetchMongoData(): Promise<any | null> {
           const doc = await mongo.collection(key).findOne({ _id: "singleton" as any }, { maxTimeMS: 6000 });
           return { key, data: doc && doc.value !== undefined ? doc.value : null };
         } else {
-          const docs = await mongo.collection(key).find({}, { maxTimeMS: 6000 }).toArray();
+          // Exclude heavy secondary gallery arrays (~66MB) during bulk list fetch so memory stays under 40MB on Render Free Tier;
+          // full product galleries are queried directly from MongoDB on-demand in /api/products/:id and /api/admin/products/:id.
+          const projection = key === "products"
+            ? { images: 0, imageVariants: 0, sizeChartImage: 0 }
+            : key === "orders"
+            ? { "items.images": 0, "items.imageVariants": 0, "items.sizeChartImage": 0, "items.description": 0 }
+            : undefined;
+          const docs = await mongo.collection(key).find({}, { maxTimeMS: 6000, ...(projection ? { projection } : {}) }).toArray();
           const mapped = docs.map((doc: any) => {
             const item = { ...doc };
             if (doc._id && !doc.id) {
@@ -272,7 +282,7 @@ async function fetchMongoData(): Promise<any | null> {
       cachedPublicDbTime = Date.now();
       cachedAdminDb = sanitizeAdminDb(dbObj);
       cachedAdminDbTime = Date.now();
-      // Persist snapshot to disk cache asynchronously
+      // Persist lightweight snapshot to disk cache asynchronously
       saveDiskCacheSnapshot(dbObj).catch(() => {});
       return dbObj;
     }
@@ -413,6 +423,11 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
   
   const nextPromise = currentPromise.then(async () => {
     // Immediately update memory cache and public/admin caches for zero-latency consistency
+    if (key === "products" && Array.isArray(data)) {
+      data.forEach((item: any) => {
+        if (item && item.id) singleProductCache.delete(String(item.id));
+      });
+    }
     if (memoryDbCache) {
       if (Array.isArray(data) && Array.isArray(memoryDbCache[key])) {
         const itemMap = new Map();
@@ -422,8 +437,13 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
         data.forEach((item: any) => {
           if (item && item.id) {
             const existing = itemMap.get(String(item.id));
-            // Merge so omitted heavy gallery fields remain intact in memoryDbCache
-            itemMap.set(String(item.id), existing ? { ...existing, ...item } : item);
+            const merged = existing ? { ...existing, ...item } : item;
+            if (key === "products") {
+              const { images, imageVariants, sizeChartImage, ...lite } = merged;
+              itemMap.set(String(item.id), lite);
+            } else {
+              itemMap.set(String(item.id), merged);
+            }
           }
         });
         memoryDbCache[key] = Array.from(itemMap.values());
@@ -697,11 +717,45 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     }
   });
 
+  async function getFullProductById(productId: string): Promise<any | null> {
+    const cached = singleProductCache.get(productId);
+    if (cached && (Date.now() - cached.time < 120000)) {
+      return cached.data;
+    }
+
+    const mongo = await getMongoDb();
+    if (mongo) {
+      try {
+        const doc = await mongo.collection("products").findOne(
+          { $or: [{ _id: productId as any }, { id: productId }] },
+          { maxTimeMS: 5000 }
+        );
+        if (doc) {
+          const item: any = { ...doc };
+          if (doc._id && !doc.id) item.id = doc._id.toString();
+          delete item._id;
+
+          // Keep max 15 items in singleProductCache so memory stays strictly bounded
+          if (singleProductCache.size >= 15) {
+            const oldestKey = singleProductCache.keys().next().value;
+            if (oldestKey) singleProductCache.delete(oldestKey);
+          }
+          singleProductCache.set(productId, { data: item, time: Date.now() });
+          return item;
+        }
+      } catch (e) {
+        console.warn("Direct MongoDB single product lookup fallback:", e);
+      }
+    }
+
+    const db = await readDb();
+    return (db.products || []).find((p: any) => p.id === productId) || null;
+  }
+
   app.get("/api/products/:id", async (req, res) => {
     try {
-      const db = await readDb();
-      const product = (db.products || []).find((p: any) => p.id === req.params.id && !p.deleted);
-      if (!product) {
+      const product = await getFullProductById(req.params.id);
+      if (!product || product.deleted) {
         return res.status(404).json({ error: "Product not found" });
       }
       const { costPrice, ...sanitizedProduct } = product;
@@ -766,8 +820,7 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
 
   app.get("/api/admin/products/:id", async (req, res) => {
     try {
-      const db = await readDb();
-      const product = (db.products || []).find((p: any) => p.id === req.params.id);
+      const product = await getFullProductById(req.params.id);
       if (!product) {
         return res.status(404).json({ error: "Product not found" });
       }
@@ -1307,15 +1360,21 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
     }
 
     try {
-      if (process.env.NODE_ENV !== "production" && !process.env.VERCEL && viteInstance) {
+      // If dist/index.html exists (built production bundle), serve it for SPA routing unless Vite dev middleware is active
+      if (viteInstance && process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
         const indexPath = path.join(process.cwd(), "index.html");
         let template = await fs.readFile(indexPath, "utf-8");
         template = await viteInstance.transformIndexHtml(req.originalUrl, template);
         return res.status(200).set({ "Content-Type": "text/html" }).send(template);
-      } else if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
-        return res.send("Loading Vite dev server...");
-      } else {
-        return res.sendFile(path.join(distPath, "index.html"));
+      }
+
+      const distIndex = path.join(distPath, "index.html");
+      try {
+        await fs.access(distIndex);
+        return res.sendFile(distIndex);
+      } catch {
+        const rootIndex = path.join(process.cwd(), "index.html");
+        return res.sendFile(rootIndex);
       }
     } catch (err) {
       next(err);
@@ -1331,11 +1390,22 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
     res.status(err.status || 500).json({ error: err.message || "Internal server error" });
   });
 
+  // Prevent unhandled rejections or exceptions from crashing the Node process on Render (causes 502 Bad Gateway)
+  process.on("unhandledRejection", (reason) => {
+    console.warn("Unhandled Promise Rejection caught safely:", reason);
+  });
+  process.on("uncaughtException", (err) => {
+    console.error("Uncaught Exception caught safely:", err);
+  });
+
   if (!process.env.VERCEL) {
     const PORT = Number(process.env.PORT) || 3000;
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
+    const server = app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://0.0.0.0:${PORT}`);
     });
+    // Render & Cloudflare load balancer fix: prevent 502 Bad Gateway on page refresh due to keep-alive socket race conditions
+    server.keepAliveTimeout = 65000;
+    server.headersTimeout = 66000;
   }
 
 export { app };
