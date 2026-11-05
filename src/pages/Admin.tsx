@@ -2250,7 +2250,7 @@ export default function AdminDashboard() {
           {!isForgotPasswordFlow ? (
             <>
               <h1 className="text-2xl font-black uppercase tracking-tight text-gray-900 mb-2">Admin Login</h1>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-8">প্যানেল এক্সেস করতে লগইন করুন</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-8"></p>
             
               <form onSubmit={handleLogin} className="space-y-5 text-left">
                 <div className="space-y-2">
@@ -2332,7 +2332,7 @@ export default function AdminDashboard() {
                 </button>
                 <h1 className="text-xl font-black uppercase tracking-tight text-gray-900">Forgot Password</h1>
               </div>
-              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-8">পাসওয়ার্ড পুনর্দ্ধার করতে মেইল ভেরিফাই করুন</p>
+              <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-8"></p>
 
               {forgotPasswordStep === 'email' && (
                 <div className="space-y-5 text-left">

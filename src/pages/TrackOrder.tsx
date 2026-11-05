@@ -158,7 +158,7 @@ export default function TrackOrder() {
           <h1 className="text-3xl md:text-4xl font-black uppercase text-slate-900 dark:text-white mb-3 tracking-tighter">
             Track <span className="text-blue-600">Order</span>
           </h1>
-          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium">অর্ডার স্ট্যাটাস দেখতে আপনার আইডি বা ফোন নম্বর ব্যবহার করুন।</p>
+          <p className="text-slate-500 dark:text-slate-400 text-sm font-medium"></p>
         </div>
 
         <AnimatePresence mode="wait">
