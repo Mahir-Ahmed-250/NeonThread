@@ -74,10 +74,10 @@ export default function Home() {
             <div className="h-12 w-36 bg-white/20 rounded-xl" />
           </div>
         ) : (
-          <div className="relative h-[45vh] sm:h-[60vh] w-full overflow-hidden bg-gray-900 rounded-3xl group">
-            <AnimatePresence mode="wait">
+          <div key={`carousel-${activeSlides.length}`} className="relative h-[45vh] sm:h-[60vh] w-full overflow-hidden bg-gray-900 rounded-3xl group">
+            <AnimatePresence initial={false}>
               {activeSlides.map((slide, index) => (
-                index === currentSlide && (
+                (index === currentSlide || activeSlides.length === 1) && (
                   <motion.div
                     key={slide.id}
                     initial={{ opacity: 0 }}

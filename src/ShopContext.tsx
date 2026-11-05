@@ -453,23 +453,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Safety fallback: Ensure loader completes in maximum 1.2 seconds even if server response is delayed
     const safetyTimer = setTimeout(() => {
       setIsDbLoaded(true);
-    }, 1200);
+    }, 8000);
 
     const fetchDb = async () => {
-      const controller = new AbortController();
-      const abortTimer = setTimeout(() => controller.abort(), 8000);
-
       try {
         let currentToken = authToken;
         let endpoint = currentToken ? '/api/admin/db' : '/api/db';
         let options: RequestInit = currentToken ? {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: currentToken }),
-          signal: controller.signal
+          body: JSON.stringify({ token: currentToken })
         } : {
-          method: 'GET',
-          signal: controller.signal
+          method: 'GET'
         };
 
         let res = await fetch(endpoint, options);
@@ -484,11 +479,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Retry with public db endpoint
           endpoint = '/api/db';
-          options = { method: 'GET', signal: controller.signal };
+          options = { method: 'GET' };
           res = await fetch(endpoint, options);
         }
-
-        clearTimeout(abortTimer);
 
         if (!res.ok) {
           throw new Error(`Server responded with ${res.status}`);

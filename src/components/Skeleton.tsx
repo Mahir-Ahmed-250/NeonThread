@@ -42,7 +42,7 @@ export const ImageWithSkeleton: React.FC<ImageWithSkeletonProps> = ({
   className = '',
   imageClassName = '',
   onClick,
-  loading = 'eager',
+  loading = 'lazy',
   dark = false
 }) => {
   const [isLoaded, setIsLoaded] = useState(false);
@@ -50,41 +50,19 @@ export const ImageWithSkeleton: React.FC<ImageWithSkeletonProps> = ({
   const imgRef = React.useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    if (!src) {
-      setIsLoaded(false);
-      setHasError(false);
-      return;
-    }
-
-    // Check if the DOM image is already complete (cached or data URI)
-    if (imgRef.current && imgRef.current.complete && imgRef.current.naturalWidth > 0) {
-      setIsLoaded(true);
-      setHasError(false);
-      return;
-    }
-
     setIsLoaded(false);
     setHasError(false);
-
-    // Preload to ensure immediate completion detection even if DOM event is skipped
-    const img = new Image();
-    img.src = src;
-    if (img.complete && img.naturalWidth > 0) {
+    
+    // Check if image is already completed (cached)
+    if (imgRef.current && imgRef.current.complete) {
       setIsLoaded(true);
-    } else {
-      img.onload = () => {
-        setIsLoaded(true);
-      };
-      img.onerror = () => {
-        // Fallback handled by element onError
-      };
     }
   }, [src]);
 
   return (
     <div className={`relative overflow-hidden ${className}`} onClick={onClick}>
       {(!isLoaded && !hasError && !!src) && (
-        <div className={`absolute inset-0 animate-pulse z-10 flex items-center justify-center pointer-events-none ${dark ? 'bg-gray-800' : 'bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800'}`}>
+        <div className={`absolute inset-0 animate-pulse z-10 flex items-center justify-center ${dark ? 'bg-gray-800' : 'bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 dark:from-gray-800 dark:via-gray-700 dark:to-gray-800'}`}>
           <div className="w-full h-full bg-[length:200%_100%] animate-[shimmer_1.5s_infinite] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
         </div>
       )}
@@ -98,16 +76,9 @@ export const ImageWithSkeleton: React.FC<ImageWithSkeletonProps> = ({
           src={src}
           alt={alt}
           loading={loading}
-          decoding="async"
-          onLoad={() => {
-            setIsLoaded(true);
-            setHasError(false);
-          }}
-          onError={() => {
-            setHasError(true);
-            setIsLoaded(true);
-          }}
-          className={`${imageClassName || 'w-full h-full object-cover'} transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
+          onLoad={() => setIsLoaded(true)}
+          onError={() => setHasError(true)}
+          className={`${imageClassName || 'w-full h-full object-cover'} transition-opacity duration-500 ${isLoaded ? 'opacity-100' : 'opacity-0'}`}
         />
       )}
     </div>
