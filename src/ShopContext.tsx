@@ -453,7 +453,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Safety fallback: Ensure loader completes in maximum 1.2 seconds even if server response is delayed
     const safetyTimer = setTimeout(() => {
       setIsDbLoaded(true);
-    }, 8000);
+    }, 1200);
 
     const fetchDb = async () => {
       try {

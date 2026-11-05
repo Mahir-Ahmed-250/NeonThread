@@ -19,16 +19,28 @@ const DB_FILE = process.env.VERCEL
   : path.join(process.cwd(), 'db.json');
 
 const COLLECTION_KEYS = [
-  "products", "faqs", "policies", "orders", "coupons", "slides", "categoryBanners",
-  "lookbook", "subscribers", "contactMessages", "popupAds", "homeAds", "admins",
-  "otps", "categories", "maintenance_mode", "contactInfo", "wishlist", "comparison",
-  "reviews", "announcements", "socialLinks"
-];
-
-const PUBLIC_COLLECTION_KEYS = [
-  "products", "faqs", "policies", "slides", "categoryBanners", "lookbook",
-  "homeAds", "categories", "maintenance_mode", "contactInfo", "announcements",
-  "socialLinks", "reviews", "coupons"
+  "products",
+  "faqs",
+  "policies",
+  "orders",
+  "coupons",
+  "slides",
+  "categoryBanners",
+  "lookbook",
+  "subscribers",
+  "contactMessages",
+  "popupAds",
+  "homeAds",
+  "admins",
+  "otps",
+  "categories",
+  "maintenance_mode",
+  "contactInfo",
+  "wishlist",
+  "comparison",
+  "reviews",
+  "announcements",
+  "socialLinks"
 ];
 
 let mongoClient: MongoClient | null = null;
@@ -173,24 +185,16 @@ async function refreshMongoInBackground() {
   }
 }
 
-async function readDb(forceFresh = false, keysToFetch = COLLECTION_KEYS) {
-  const isFullFetch = keysToFetch.length === COLLECTION_KEYS.length;
-  
+async function readDb(forceFresh = false) {
   // If we have cached memory data and it is fresh, return immediately (< 1ms)
   if (!forceFresh && memoryDbCache && (Date.now() - memoryCacheTimestamp < CACHE_TTL_MS)) {
-    if (isFullFetch) return memoryDbCache;
-    const partialDb: any = {};
-    keysToFetch.forEach(k => partialDb[k] = memoryDbCache[k]);
-    return partialDb;
+    return memoryDbCache;
   }
 
   // If memory cache exists but is expired, return it immediately and refresh in background
   if (!forceFresh && memoryDbCache) {
     refreshMongoInBackground();
-    if (isFullFetch) return memoryDbCache;
-    const partialDb: any = {};
-    keysToFetch.forEach(k => partialDb[k] = memoryDbCache[k]);
-    return partialDb;
+    return memoryDbCache;
   }
 
   // If memoryDbCache is not yet set, try reading from disk cache first for zero-latency startup
@@ -210,14 +214,12 @@ async function readDb(forceFresh = false, keysToFetch = COLLECTION_KEYS) {
       const dbObj: any = {};
       
       const results = await Promise.allSettled(
-        keysToFetch.map(async (key) => {
+        COLLECTION_KEYS.map(async (key) => {
           if (["maintenance_mode", "contactInfo", "wishlist", "comparison"].includes(key)) {
             const doc = await mongo.collection(key).findOne({ _id: "singleton" as any });
             return { key, data: doc && doc.value !== undefined ? doc.value : null };
           } else {
-            // Optimization: Only fetch what's needed for public view if requested
-            const projection = PUBLIC_COLLECTION_KEYS.includes(key) && !isFullFetch ? { costPrice: 0 } : {};
-            const docs = await mongo.collection(key).find({}, { projection }).toArray();
+            const docs = await mongo.collection(key).find({}).toArray();
             const mapped = docs.map((doc: any) => {
               const item = { ...doc };
               if (doc._id && !doc.id) {
@@ -656,7 +658,7 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
         return res.json(cachedPublicDb);
       }
 
-      const rawDb = await readDb(false, PUBLIC_COLLECTION_KEYS);
+      const rawDb = await readDb();
       if (!rawDb) return res.json({});
       
       const sanitized = sanitizePublicDb(rawDb);

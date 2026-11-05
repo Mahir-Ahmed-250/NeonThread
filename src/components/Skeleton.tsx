@@ -50,13 +50,14 @@ export const ImageWithSkeleton: React.FC<ImageWithSkeletonProps> = ({
   const imgRef = React.useRef<HTMLImageElement>(null);
 
   useEffect(() => {
-    setIsLoaded(false);
-    setHasError(false);
-    
-    // Check if image is already completed (cached)
     if (imgRef.current && imgRef.current.complete) {
       setIsLoaded(true);
     }
+  }, [src]);
+
+  useEffect(() => {
+    setIsLoaded(false);
+    setHasError(false);
   }, [src]);
 
   return (
