@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie, Legend } from 'recharts';
 import { useShop } from '../ShopContext';
-import { Package, ShoppingBag, Ticket, Trash2, Plus, Minus, Edit, LogOut, Layout, Image, Camera, X, Users, Mail, MonitorPlay, Printer, HelpCircle, ShieldCheck, ShieldAlert, Ruler, ShoppingBasket, Home, TrendingUp, DollarSign, PackageCheck, UserCircle, Settings, Megaphone, MessageSquare, Search, Calendar, MapPin, Truck, CheckCircle, XCircle, Download, Clock, Bell, Key, History, Loader2, Star, Tag, Layers, Check, Phone, Facebook, Instagram, Youtube, Twitter, Music2, Share2, UploadCloud, ArrowUp, ArrowDown } from 'lucide-react';
+import { Package, ShoppingBag, Ticket, Trash2, Plus, Minus, Edit, LogOut, Layout, Image, Camera, X, Users, Mail, MonitorPlay, Printer, HelpCircle, ShieldCheck, ShieldAlert, Ruler, ShoppingBasket, Home, TrendingUp, DollarSign, PackageCheck, UserCircle, Settings, Megaphone, MessageSquare, Search, Calendar, MapPin, Truck, CheckCircle, XCircle, Download, Clock, Bell, Key, History, Loader2, Star, Tag, Layers, Check, Phone, Facebook, Instagram, Youtube, Twitter, Music2, Share2, UploadCloud, Eye, EyeOff, Grid, ArrowLeft, ArrowRight, Save, RotateCcw } from 'lucide-react';
 import { Product, ProductImageVariant, Category, PopupAd, FAQItem, PolicyItem, HomeAd, AdminUser, LookbookImage, CategoryBanner, Coupon, Order, AdminPermissions, Review, Announcement, SocialLink } from '../types';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
@@ -26,6 +26,70 @@ const SummaryCard = ({ title, count, icon: Icon, alert }: { title: string, count
 // Helper for DD/MM/YYYY
 const formatDate = (date: string | number | Date) => new Date(date).toLocaleDateString('en-GB');
 const formatTime = (date: string | number | Date) => new Date(date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+
+const LOOKBOOK_GRID_PRESETS = [
+  {
+    id: 'col-span-1 row-span-1',
+    label: 'Standard Square (1 Col × 1 Row)',
+    badge: '1x1 Standard',
+    desc: 'Compact square card (default grid size)'
+  },
+  {
+    id: 'col-span-1 md:row-span-2 min-h-[360px]',
+    label: 'Tall Portrait (1 Col × 2 Rows)',
+    badge: '1x2 Portrait',
+    desc: 'Vertical fashion model portrait spanning 2 rows'
+  },
+  {
+    id: 'col-span-2 row-span-1',
+    label: 'Wide Banner (2 Cols × 1 Row)',
+    badge: '2x1 Wide',
+    desc: 'Horizontal wide card spanning 2 columns'
+  },
+  {
+    id: 'col-span-2 md:col-span-2 md:row-span-2 min-h-[360px]',
+    label: 'Large Feature Hero (2 Cols × 2 Rows)',
+    badge: '2x2 Large Hero',
+    desc: 'Large highlight card spanning 2 columns & 2 rows'
+  },
+  {
+    id: 'col-span-2 md:col-span-3 row-span-1',
+    label: 'Triple Width Banner (3 Cols × 1 Row)',
+    badge: '3x1 Triple',
+    desc: 'Extra wide horizontal card across 3 columns'
+  },
+  {
+    id: 'col-span-2 md:col-span-4 row-span-1 min-h-[260px]',
+    label: 'Full Width Showcase (4 Cols / 100% Width)',
+    badge: '4x1 Full Width',
+    desc: 'Full-width banner card spanning the entire row'
+  },
+  {
+    id: 'col-span-1 md:row-span-3 min-h-[440px]',
+    label: 'Ultra Tall Editorial (1 Col × 3 Rows)',
+    badge: '1x3 Editorial',
+    desc: 'Editorial vertical fashion drop spanning 3 rows'
+  },
+  {
+    id: 'col-span-1 row-span-1 min-h-[290px]',
+    label: 'Medium Elongated (1 Col × Height 290px)',
+    badge: '1x1 Medium',
+    desc: 'Single column with extra vertical height'
+  }
+];
+
+const getLookbookPresetBadge = (className?: string) => {
+  const match = LOOKBOOK_GRID_PRESETS.find(p => p.id === className);
+  if (match) return match.badge;
+  if (!className || className === 'col-span-1 row-span-1') return '1x1 Standard';
+  if (className.includes('row-span-2') && className.includes('col-span-1')) return '1x2 Portrait';
+  if (className.includes('col-span-2') && className.includes('row-span-2')) return '2x2 Large Hero';
+  if (className.includes('col-span-2') && className.includes('row-span-1')) return '2x1 Wide';
+  if (className.includes('col-span-3')) return '3x1 Triple';
+  if (className.includes('col-span-4')) return '4x1 Full Width';
+  if (className.includes('row-span-3')) return '1x3 Editorial';
+  return 'Custom';
+};
 
 const WhatsAppIcon = ({ size = 18, className = "" }: { size?: number, className?: string }) => (
   <svg 
@@ -1222,9 +1286,9 @@ export default function AdminDashboard() {
     fetch('/api/db/status')
       .then(res => res.json())
       .then(data => setDbStatus(data))
-      .catch(err => console.error('Error fetching db status:', err));
+      .catch(err => console.warn('Could not fetch db status:', err));
   }, []);
-  const { products, reviews, updateReviewStatus, deleteReview, orders, coupons, slides, updateSlide, categoryBanners, updateCategoryBanner, lookbook, subscribers, contactMessages, popupAds, homeAds, faqs, policies, categories, addCategory, updateCategory, deleteCategory, addProduct, updateProduct, deleteProduct, updateOrderStatus, updateOrderNotes, updateOrder, deleteOrder, addCoupon, updateCoupon, deleteCoupon, addSlide, deleteSlide, addCategoryBanner, deleteCategoryBanner, addLookbookImage, updateLookbookImage, deleteLookbookImage, moveLookbookImage, deleteSubscriber, deleteContactMessage, addPopupAd, deletePopupAd, updatePopupAd, addHomeAd, deleteHomeAd, updateHomeAd, addFAQ, updateFAQ, deleteFAQ, addPolicy, updatePolicy, deletePolicy, isAdminAuth, loginAdmin, logoutAdmin, updateProfile, currentAdmin, admins, addAdmin, updateAdmin, deleteAdmin } = useShop();
+  const { products, reviews, updateReviewStatus, deleteReview, orders, coupons, slides, updateSlide, categoryBanners, updateCategoryBanner, lookbook, subscribers, contactMessages, popupAds, homeAds, faqs, policies, categories, addCategory, updateCategory, deleteCategory, addProduct, updateProduct, deleteProduct, updateOrderStatus, updateOrderNotes, updateOrder, deleteOrder, addCoupon, updateCoupon, deleteCoupon, addSlide, deleteSlide, addCategoryBanner, deleteCategoryBanner, addLookbookImage, updateLookbookImage, updateLookbookList, deleteLookbookImage, deleteSubscriber, deleteContactMessage, addPopupAd, deletePopupAd, updatePopupAd, addHomeAd, deleteHomeAd, updateHomeAd, addFAQ, updateFAQ, deleteFAQ, addPolicy, updatePolicy, deletePolicy, isAdminAuth, loginAdmin, logoutAdmin, updateProfile, currentAdmin, admins, addAdmin, updateAdmin, deleteAdmin } = useShop();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
@@ -1409,7 +1473,7 @@ export default function AdminDashboard() {
         showConfirmButton: false
       });
     } catch (error) {
-      console.error('Upload failed:', error);
+      console.warn('Upload failed:', error);
       Swal.fire({
         icon: 'error',
         title: 'ব্যর্থ!',
@@ -1446,7 +1510,7 @@ export default function AdminDashboard() {
         showConfirmButton: false
       });
     } catch (error) {
-      console.error('Multiple upload failed:', error);
+      console.warn('Multiple upload failed:', error);
       Swal.fire({
         icon: 'error',
         title: 'ব্যর্থ!',
@@ -1850,8 +1914,93 @@ export default function AdminDashboard() {
   const [newSlide, setNewSlide] = useState({ title: '', subtitle: '', image: '', tagText: '', link: '' });
   const [editingSlide, setEditingSlide] = useState<any | null>(null);
   const [newCategoryBanner, setNewCategoryBanner] = useState({ title: '', subtitle: '', image: '', link: '' });
-  const [newLookbook, setNewLookbook] = useState({ image: '', link: '', className: '', widthPercent: '100%', heightPercent: 'auto', serial: 1, title: '' });
+  const [newLookbook, setNewLookbook] = useState({ image: '', link: '', className: 'col-span-1 row-span-1', widthPercent: '100%', heightPercent: 'auto', serial: 1, title: '' });
   const [editingLookbook, setEditingLookbook] = useState<LookbookImage | null>(null);
+  const [showLookbookGridPreview, setShowLookbookGridPreview] = useState(true);
+  const [lookbookModalPreviewTab, setLookbookModalPreviewTab] = useState<'grid' | 'tile'>('grid');
+  const [arrangedLookbook, setArrangedLookbook] = useState<LookbookImage[]>([]);
+  const [isLookbookOrderChanged, setIsLookbookOrderChanged] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!isLookbookOrderChanged) {
+      setArrangedLookbook([...lookbook].sort((a, b) => (a.serial || 0) - (b.serial || 0)));
+    }
+  }, [lookbook, isLookbookOrderChanged]);
+
+  const handleMoveLookbookPosition = (currentIndex: number, direction: 'left' | 'right') => {
+    const targetIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
+    if (targetIndex < 0 || targetIndex >= arrangedLookbook.length) return;
+
+    const newList = [...arrangedLookbook];
+    const itemA = newList[currentIndex];
+    const itemB = newList[targetIndex];
+
+    newList[currentIndex] = itemB;
+    newList[targetIndex] = itemA;
+
+    const updated = newList.map((item, idx) => ({
+      ...item,
+      serial: idx + 1
+    }));
+
+    setArrangedLookbook(updated);
+    setIsLookbookOrderChanged(true);
+  };
+
+  const handleNormalizeLookbookSerials = () => {
+    const updated = arrangedLookbook.map((item, idx) => ({
+      ...item,
+      serial: idx + 1
+    }));
+    setArrangedLookbook(updated);
+    setIsLookbookOrderChanged(true);
+    Swal.fire({
+      title: 'Normalized',
+      text: 'Serials set to 1, 2, 3... Click Save to apply.',
+      icon: 'info',
+      timer: 1500,
+      showConfirmButton: false
+    });
+  };
+
+  const handleSaveLookbookArrangement = async () => {
+    try {
+      const normalized = arrangedLookbook.map((item, idx) => ({
+        ...item,
+        serial: idx + 1
+      }));
+      updateLookbookList(normalized);
+      setIsLookbookOrderChanged(false);
+      Swal.fire({
+        title: 'Saved!',
+        text: 'Lookbook grid arrangement has been saved successfully.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
+    } catch (e) {
+      Swal.fire('Error', 'Failed to save lookbook arrangement', 'error');
+    }
+  };
+
+  const handleResetLookbookArrangement = () => {
+    setArrangedLookbook([...lookbook].sort((a, b) => (a.serial || 0) - (b.serial || 0)));
+    setIsLookbookOrderChanged(false);
+  };
+
+  const simulatedLookbook = React.useMemo(() => {
+    const list = [...lookbook].filter(l => editingLookbook ? l.id !== editingLookbook.id : true);
+    const candidateItem: LookbookImage = {
+      id: editingLookbook?.id || 'simulated-new-item',
+      image: newLookbook.image || '',
+      link: newLookbook.link || '/shop',
+      className: newLookbook.className || 'col-span-1 row-span-1',
+      serial: Number(newLookbook.serial) || (list.length + 1),
+      title: newLookbook.title || 'Preview Item'
+    };
+    list.push(candidateItem);
+    return list.sort((a, b) => (a.serial || 0) - (b.serial || 0));
+  }, [lookbook, editingLookbook, newLookbook]);
   const [newPopupAd, setNewPopupAd] = useState({ imageUrl: '', linkUrl: '', isActive: true, pagesString: 'all' });
   const [newHomeAd, setNewHomeAd] = useState({ title: '', subtitle: '', imageUrl: '', linkUrl: '', isActive: true });
   
@@ -3021,6 +3170,13 @@ export default function AdminDashboard() {
         title: newLookbook.title
       });
       setEditingLookbook(null);
+      Swal.fire({
+        title: 'Updated!',
+        text: 'Lookbook item updated successfully.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
     } else {
       addLookbookImage({
         image: newLookbook.image,
@@ -3031,9 +3187,16 @@ export default function AdminDashboard() {
         serial: Number(newLookbook.serial) || 1,
         title: newLookbook.title
       });
+      Swal.fire({
+        title: 'Saved!',
+        text: 'Lookbook item added successfully.',
+        icon: 'success',
+        timer: 1500,
+        showConfirmButton: false
+      });
     }
     setIsAddingLookbook(false);
-    setNewLookbook({ image: '', link: '', className: '', widthPercent: '100%', heightPercent: 'auto', serial: 1, title: '' });
+    setNewLookbook({ image: '', link: '', className: 'col-span-1 row-span-1', widthPercent: '100%', heightPercent: 'auto', serial: 1, title: '' });
   };
 
   const handleSendEmail = async (e: React.FormEvent) => {
@@ -6750,7 +6913,7 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {slides.map(s => (
+                  {slides.filter(s => !s.deleted).map(s => (
                     <tr key={s.id}>
                       <td className="p-4 flex items-center gap-3">
                         {s.image && <img src={s.image} className="w-16 h-10 rounded object-cover" alt="" />}
@@ -6994,42 +7157,384 @@ export default function AdminDashboard() {
         {/* Lookbook Tab */}
         {activeTab === 'lookbook' && (
           <div>
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-              <h1 className="text-2xl font-black uppercase">Lookbook Images</h1>
-              <button 
-                onClick={() => {
-                  setEditingLookbook(null);
-                  setNewLookbook({ image: '', link: '', className: '', serial: lookbook.length + 1, title: '' });
-                  setIsAddingLookbook(!isAddingLookbook);
-                }}
-                className="bg-black text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 tracking-widest text-[10px] font-bold uppercase transition-colors"
-               >
-                {isAddingLookbook ? 'Cancel' : <><Plus className="h-4 w-4"/> Add Lookbook Item</>}
-              </button>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-gray-100 pb-4">
+              <div>
+                <h1 className="text-2xl font-black uppercase flex items-center gap-2 text-gray-900">
+                  <Grid className="w-6 h-6 text-black" />
+                  <span>Lookbook Gallery</span>
+                </h1>
+                <p className="text-xs text-gray-500 mt-1 font-medium">
+                  Manage homepage visual gallery, grid tile spans, and direct product/category links
+                </p>
+              </div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => setShowLookbookGridPreview(!showLookbookGridPreview)}
+                  className={`px-3.5 py-2.5 rounded-xl flex items-center gap-2 text-xs font-bold uppercase tracking-wider border transition-all ${
+                    showLookbookGridPreview 
+                      ? 'bg-blue-50 border-blue-200 text-blue-700 shadow-sm' 
+                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                  }`}
+                  title="Toggle Homepage Live Grid Preview"
+                >
+                  {showLookbookGridPreview ? (
+                    <>
+                      <EyeOff className="h-4 w-4 text-blue-600" />
+                      <span>Hide Grid Preview</span>
+                    </>
+                  ) : (
+                    <>
+                      <Eye className="h-4 w-4 text-gray-500" />
+                      <span>Live Grid Preview</span>
+                    </>
+                  )}
+                </button>
+                <button 
+                  onClick={() => {
+                    setEditingLookbook(null);
+                    setNewLookbook({ image: '', link: '', className: 'col-span-1 row-span-1', serial: lookbook.length + 1, title: '' });
+                    setIsAddingLookbook(!isAddingLookbook);
+                  }}
+                  className="bg-black text-white px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-gray-800 tracking-wider text-xs font-bold uppercase transition-all shadow-sm active:scale-95"
+                >
+                  {isAddingLookbook ? 'Cancel' : <><Plus className="h-4 w-4"/> Add Lookbook Item</>}
+                </button>
+              </div>
             </div>
 
-            {isAddingLookbook && (
-              <div className="fixed inset-0 z-[150] flex items-start justify-center bg-black/50 backdrop-blur-sm p-4 pt-16 md:pt-20 pb-6">
-                <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-4xl shadow-2xl relative flex flex-col md:flex-row gap-8 max-h-[82vh] overflow-y-auto">
-                  <div className="w-full md:w-2/5 flex flex-col gap-4">
-                    <div className="aspect-[4/5] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200 shadow-inner">
-                      {newLookbook.image ? (
-                        <img src={newLookbook.image} alt="Preview" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-400">
-                          <Image className="h-12 w-12 opacity-50" />
+            {/* Interactive Live Grid Preview */}
+            {showLookbookGridPreview && (
+              <div className="mb-8 bg-gradient-to-br from-gray-50 via-white to-gray-50 p-5 sm:p-6 rounded-3xl border border-gray-200 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 pb-3 border-b border-gray-200">
+                  <div className="flex items-center gap-2.5">
+                    <span className="p-2 bg-black text-white rounded-xl shadow-sm">
+                      <Grid className="w-4 h-4" />
+                    </span>
+                    <div>
+                      <h3 className="text-sm font-black uppercase tracking-wider text-gray-900">
+                        Live Grid Preview & Visual Arranger
+                      </h3>
+                      <p className="text-[11px] text-gray-500 font-medium">
+                        Cards render below in the exact 4-column storefront grid. Reorder tiles using ◄ / ► arrows and click "Save Grid Arrangement".
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={handleNormalizeLookbookSerials}
+                      className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-[11px] font-bold uppercase tracking-wider border border-gray-200 transition-colors"
+                      title="Normalize sequence into 1, 2, 3..."
+                    >
+                      Normalize (1, 2, 3...)
+                    </button>
+                    {isLookbookOrderChanged && (
+                      <button
+                        type="button"
+                        onClick={handleResetLookbookArrangement}
+                        className="px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 rounded-xl text-[11px] font-bold uppercase tracking-wider border border-gray-200 transition-colors"
+                      >
+                        <RotateCcw className="w-3 h-3 inline mr-1" /> Reset
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleSaveLookbookArrangement}
+                      className={`px-4 py-1.5 rounded-xl text-[11px] font-black uppercase tracking-wider transition-all flex items-center gap-1.5 shadow-sm ${
+                        isLookbookOrderChanged 
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white animate-pulse' 
+                          : 'bg-black hover:bg-gray-800 text-white'
+                      }`}
+                    >
+                      <Save className="w-3.5 h-3.5" />
+                      <span>{isLookbookOrderChanged ? 'Save Grid Arrangement *' : 'Save Arrangement'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Status notice when arrangement has unsaved changes */}
+                {isLookbookOrderChanged && (
+                  <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-300 p-3.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 mb-5 shadow-sm">
+                    <div className="flex items-center gap-2.5">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping" />
+                      <p className="text-xs font-bold text-amber-900">
+                        Lookbook grid positions have been modified! Click <span className="font-black text-black">"Save Grid Arrangement"</span> to apply changes to database.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleResetLookbookArrangement}
+                        className="px-3 py-1 bg-white text-gray-700 hover:bg-gray-100 rounded-lg text-xs font-bold uppercase tracking-wider border border-gray-200"
+                      >
+                        Reset
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSaveLookbookArrangement}
+                        className="px-4 py-1 bg-black text-white hover:bg-gray-800 rounded-lg text-xs font-black uppercase tracking-wider shadow-sm flex items-center gap-1"
+                      >
+                        <Save className="w-3 h-3 text-emerald-400" /> Save Now
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {arrangedLookbook.length === 0 ? (
+                  <div className="py-12 flex flex-col items-center justify-center text-center bg-white rounded-2xl border border-dashed border-gray-300">
+                    <Image className="w-12 h-12 text-gray-300 mb-3" />
+                    <p className="text-sm font-bold text-gray-800">No Lookbook Images Added Yet</p>
+                    <p className="text-xs text-gray-400 mt-1 max-w-sm">
+                      Click the "Add Lookbook Item" button above to upload photo tiles and set up your grid layout.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-fr">
+                    {arrangedLookbook.map((l, idx, arr) => (
+                      <div
+                        key={l.id}
+                        className={`relative rounded-2xl overflow-hidden group min-h-[190px] border border-gray-200 shadow-sm bg-gray-900 flex flex-col justify-end transition-all ${l.className || 'col-span-1 row-span-1'}`}
+                      >
+                        {l.image ? (
+                          <img
+                            src={l.image}
+                            alt={l.title || "Lookbook Tile"}
+                            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          />
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center bg-gray-200 text-gray-400">
+                            <Image className="w-8 h-8" />
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-black/35 pointer-events-none" />
+
+                        {/* Top Badges & Position Controls */}
+                        <div className="absolute top-2.5 left-2.5 right-2.5 flex items-center justify-between gap-1 z-10">
+                          <div className="flex items-center gap-1">
+                            <span className="bg-black/80 backdrop-blur-md text-white text-[10px] font-black px-2 py-0.5 rounded-md shadow-sm border border-white/10">
+                              #{l.serial || 0}
+                            </span>
+                            {/* Position Arrange Buttons on Card */}
+                            <div className="flex items-center gap-0.5 bg-black/60 backdrop-blur-md p-0.5 rounded-md">
+                              {idx > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveLookbookPosition(idx, 'left')}
+                                  className="text-white hover:text-yellow-300 p-0.5 rounded transition-colors"
+                                  title="Move Left / Earlier"
+                                >
+                                  <ArrowLeft className="w-3 h-3" />
+                                </button>
+                              )}
+                              {idx < arr.length - 1 && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleMoveLookbookPosition(idx, 'right')}
+                                  className="text-white hover:text-yellow-300 p-0.5 rounded transition-colors"
+                                  title="Move Right / Later"
+                                >
+                                  <ArrowRight className="w-3 h-3" />
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          <span className="bg-white/95 backdrop-blur-md text-gray-900 text-[9px] font-extrabold uppercase px-2 py-0.5 rounded-md shadow-sm truncate max-w-[130px]">
+                            {getLookbookPresetBadge(l.className)}
+                          </span>
                         </div>
-                      )}
+
+                        {/* Quick Admin Actions on Hover */}
+                        <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-20">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingLookbook(l);
+                              setNewLookbook({
+                                image: l.image,
+                                link: l.link,
+                                className: l.className || 'col-span-1 row-span-1',
+                                widthPercent: l.widthPercent || '100%',
+                                serial: l.serial || 1,
+                                title: l.title || ''
+                              });
+                              setIsAddingLookbook(true);
+                            }}
+                            className="p-1.5 bg-white text-black hover:bg-gray-100 rounded-lg shadow-lg transition-transform hover:scale-105"
+                            title="Edit Item"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const result = await Swal.fire({
+                                title: 'Are you sure?',
+                                text: "Delete this lookbook item?",
+                                icon: 'warning',
+                                showCancelButton: true,
+                                confirmButtonColor: '#000',
+                                cancelButtonColor: '#d33',
+                                confirmButtonText: 'Yes, delete it!'
+                              });
+                              if (result.isConfirmed) {
+                                deleteLookbookImage(l.id);
+                                Swal.fire('Deleted!', 'Lookbook item has been deleted.', 'success');
+                              }
+                            }}
+                            className="p-1.5 bg-red-600 text-white hover:bg-red-700 rounded-lg shadow-lg transition-transform hover:scale-105"
+                            title="Delete Item"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Bottom Info Overlay */}
+                        <div className="relative z-10 p-3 text-white pointer-events-none">
+                          {l.title ? (
+                            <p className="text-xs font-black uppercase tracking-wide truncate drop-shadow-sm">
+                              {l.title}
+                            </p>
+                          ) : (
+                            <p className="text-[10px] text-gray-300 italic">No Title</p>
+                          )}
+                          <p className="text-[9px] text-gray-300 font-mono truncate mt-0.5 opacity-90">
+                            {l.link || '/shop'}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isAddingLookbook && (
+              <div className="fixed inset-0 z-[150] flex items-start justify-center bg-black/50 backdrop-blur-sm p-4 pt-14 md:pt-16 pb-6">
+                <div className="bg-white p-6 md:p-8 rounded-3xl w-full max-w-5xl shadow-2xl relative flex flex-col md:flex-row gap-8 max-h-[88vh] overflow-y-auto">
+                  {/* Left Column: Visual Preview Selector (Tile vs Full Grid Simulation) */}
+                  <div className="w-full md:w-5/12 flex flex-col gap-3">
+                    <div className="flex bg-gray-100 p-1 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setLookbookModalPreviewTab('grid')}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold uppercase transition-all ${
+                          lookbookModalPreviewTab === 'grid' 
+                            ? 'bg-black text-white shadow-sm' 
+                            : 'text-gray-500 hover:text-black'
+                        }`}
+                      >
+                        Full Grid Simulation
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLookbookModalPreviewTab('tile')}
+                        className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold uppercase transition-all ${
+                          lookbookModalPreviewTab === 'tile' 
+                            ? 'bg-black text-white shadow-sm' 
+                            : 'text-gray-500 hover:text-black'
+                        }`}
+                      >
+                        Single Tile Preview
+                      </button>
                     </div>
-                    <div className="text-center">
-                      <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Lookbook Preview</span>
-                    </div>
+
+                    {lookbookModalPreviewTab === 'grid' ? (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-gray-600">
+                            Live Grid Placement (Before Save)
+                          </span>
+                          <span className="text-[9px] font-bold bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                            Pos #{newLookbook.serial || 1}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-500 font-medium">
+                          See how this card fits and spans in the 4-column storefront layout before saving:
+                        </p>
+                        
+                        <div className="max-h-[360px] overflow-y-auto p-3 bg-gray-50 rounded-2xl border border-gray-200">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-2 auto-rows-fr">
+                            {simulatedLookbook.map(l => {
+                              const isCandidate = (editingLookbook && l.id === editingLookbook.id) || (!editingLookbook && l.id === 'simulated-new-item');
+                              return (
+                                <div
+                                  key={l.id}
+                                  className={`relative rounded-xl overflow-hidden min-h-[110px] border flex flex-col justify-end transition-all ${l.className || 'col-span-1 row-span-1'} ${
+                                    isCandidate 
+                                      ? 'ring-2 ring-blue-500 border-blue-500 shadow-lg scale-[1.02] bg-blue-950' 
+                                      : 'border-gray-300 bg-gray-900 opacity-80'
+                                  }`}
+                                >
+                                  {l.image ? (
+                                    <img src={l.image} alt={l.title} className="absolute inset-0 w-full h-full object-cover" />
+                                  ) : (
+                                    <div className="absolute inset-0 flex items-center justify-center bg-gray-200 text-gray-400">
+                                      <Image className="w-6 h-6" />
+                                    </div>
+                                  )}
+                                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-black/30 pointer-events-none" />
+                                  
+                                  <div className="absolute top-1 left-1 z-10">
+                                    <span className={`text-[8px] font-black px-1.5 py-0.5 rounded ${isCandidate ? 'bg-blue-600 text-white' : 'bg-black/75 text-white'}`}>
+                                      #{l.serial || 0}
+                                    </span>
+                                  </div>
+                                  {isCandidate && (
+                                    <div className="absolute top-1 right-1 z-10">
+                                      <span className="text-[7px] font-black uppercase px-1 py-0.5 rounded bg-amber-400 text-black animate-pulse">
+                                        ★ Preview (New)
+                                      </span>
+                                    </div>
+                                  )}
+
+                                  <div className="relative z-10 p-1.5 text-white pointer-events-none">
+                                    <p className="text-[10px] font-bold uppercase truncate leading-tight">
+                                      {l.title || (isCandidate ? 'Current Item' : 'Lookbook')}
+                                    </p>
+                                    <span className="text-[8px] font-mono text-gray-300 block truncate">
+                                      {getLookbookPresetBadge(l.className)}
+                                    </span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col gap-2">
+                        <div className="aspect-[4/5] rounded-2xl bg-gray-100 overflow-hidden border border-gray-200 shadow-inner relative flex items-center justify-center">
+                          {newLookbook.image ? (
+                            <img src={newLookbook.image} alt="Preview" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex flex-col items-center justify-center text-gray-400 gap-2">
+                              <Image className="h-12 w-12 opacity-40" />
+                              <span className="text-xs font-medium">No Image Selected</span>
+                            </div>
+                          )}
+                          <div className="absolute top-3 left-3">
+                            <span className="bg-black/80 backdrop-blur-md text-white text-[10px] font-black px-2.5 py-1 rounded-md shadow-sm">
+                              {getLookbookPresetBadge(newLookbook.className)}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Card Tile Preview</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   <form onSubmit={handleAddLookbook} className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4 content-start">
-                    <div className="md:col-span-2 flex justify-between items-center mb-4 border-b border-gray-100 pb-4">
+                    <div className="md:col-span-2 flex justify-between items-center mb-2 border-b border-gray-100 pb-3">
                       <div>
-                        <h3 className="font-black uppercase text-xl text-gray-900">{editingLookbook ? 'Edit Lookbook Item (লুকবুকসম্পাদনা)' : 'Add Lookbook Item (লুকবুক ছবি যোগ)'}</h3>
+                        <h3 className="font-black uppercase text-xl text-gray-900">
+                          {editingLookbook ? 'Edit Lookbook Item' : 'Add New Lookbook Item'}
+                        </h3>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          Set image, position, grid dimensions, and link. Changes reflect live in the preview on the left.
+                        </p>
                       </div>
                       <button 
                         type="button" 
@@ -7043,62 +7548,146 @@ export default function AdminDashboard() {
                       </button>
                     </div>
 
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Image URL / Upload Image</label>
-                      <div className="flex gap-2">
-                        <input required className="flex-1 border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" value={newLookbook.image} onChange={e=>setNewLookbook({...newLookbook, image: e.target.value})} placeholder="https://unsplash.com/etc..." />
-                        <label className="bg-black text-white p-3 rounded-xl cursor-pointer hover:bg-gray-800 transition-colors">
-                          <Camera className="w-5 h-5" />
-                          <input type="file" className="hidden" accept="image/*" onChange={e => handleImageUpload(e.target.files?.[0] || null, (url) => setNewLookbook({...newLookbook, image: url}))} />
-                        </label>
+                    {/* Image File Upload & URL input */}
+                    <div className="md:col-span-2 bg-gray-50 border border-dashed border-gray-300 rounded-2xl p-4 flex flex-col items-center justify-center gap-2">
+                      <label className="cursor-pointer bg-black text-white px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider hover:bg-gray-800 transition-colors shadow-md flex items-center gap-2">
+                        <UploadCloud className="h-4 w-4" />
+                        <span>Upload Image from Device</span>
+                        <input 
+                          type="file" 
+                          accept="image/*" 
+                          className="hidden" 
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              if (file.size > 3 * 1024 * 1024) {
+                                Swal.fire('Error', 'Image size must be less than 3MB', 'error');
+                                return;
+                              }
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setNewLookbook({ ...newLookbook, image: reader.result as string });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                      </label>
+                      <span className="text-[11px] text-gray-400 font-medium">Or paste direct image URL:</span>
+                      <input 
+                        required 
+                        className="w-full border border-gray-200 rounded-xl p-2.5 text-xs focus:ring-1 focus:ring-black focus:outline-none bg-white transition-colors" 
+                        value={newLookbook.image} 
+                        onChange={e => setNewLookbook({ ...newLookbook, image: e.target.value })} 
+                        placeholder="https://images.unsplash.com/..." 
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Display Order / Serial</label>
+                      <input 
+                        type="number" 
+                        required 
+                        min="1" 
+                        className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" 
+                        value={newLookbook.serial} 
+                        onChange={e => setNewLookbook({...newLookbook, serial: Number(e.target.value) || 1})} 
+                        placeholder="e.g. 1, 2, 3" 
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Title / Caption (Optional)</label>
+                      <input 
+                        className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" 
+                        value={newLookbook.title} 
+                        onChange={e => setNewLookbook({...newLookbook, title: e.target.value})} 
+                        placeholder="e.g. Summer Minimalist Series" 
+                      />
+                    </div>
+
+                    {/* Enhanced Grid Layout Selector with Dropdown & Presets */}
+                    <div className="md:col-span-2 bg-gray-50 p-4 rounded-2xl border border-gray-200 space-y-3">
+                      <div>
+                        <div className="flex justify-between items-center mb-1.5">
+                          <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-600">
+                            Grid Layout & Card Size (Select from Dropdown)
+                          </label>
+                          <span className="text-[10px] font-black uppercase text-black bg-white px-2 py-0.5 rounded border border-gray-200">
+                            {getLookbookPresetBadge(newLookbook.className)}
+                          </span>
+                        </div>
+                        <select
+                          className="w-full border border-gray-200 rounded-xl p-3 text-xs font-bold bg-white focus:ring-1 focus:ring-black focus:outline-none transition-colors"
+                          value={LOOKBOOK_GRID_PRESETS.some(p => p.id === newLookbook.className) ? newLookbook.className : (newLookbook.className ? 'custom' : 'col-span-1 row-span-1')}
+                          onChange={e => {
+                            if (e.target.value !== 'custom') {
+                              setNewLookbook({ ...newLookbook, className: e.target.value });
+                            }
+                          }}
+                        >
+                          {LOOKBOOK_GRID_PRESETS.map(preset => (
+                            <option key={preset.id} value={preset.id}>
+                              {preset.label} — [{preset.badge}]
+                            </option>
+                          ))}
+                          <option value="custom">Custom CSS Class (Manual Input)</option>
+                        </select>
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Serial / Position</label>
-                      <input type="number" required min="1" className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" value={newLookbook.serial} onChange={e=>setNewLookbook({...newLookbook, serial: Number(e.target.value) || 1})} placeholder="যেমন - ১, ২, ৩" />
-                    </div>
+                      {/* Quick 1-Click Preset Buttons */}
+                      <div>
+                        <span className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+                          Quick 1-Click Presets:
+                        </span>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          {LOOKBOOK_GRID_PRESETS.slice(0, 4).map(preset => {
+                            const isSelected = newLookbook.className === preset.id || (!newLookbook.className && preset.id === 'col-span-1 row-span-1');
+                            return (
+                              <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => setNewLookbook({ ...newLookbook, className: preset.id })}
+                                className={`p-2.5 rounded-xl border text-[11px] font-bold uppercase transition-all ${
+                                  isSelected 
+                                    ? 'bg-black text-white border-black shadow-md' 
+                                    : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-100'
+                                }`}
+                              >
+                                {preset.badge}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Title / শিরোনাম (ঐচ্ছিক)</label>
-                      <input className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" value={newLookbook.title} onChange={e=>setNewLookbook({...newLookbook, title: e.target.value})} placeholder="যেমন - Summer Minimalist Series" />
-                    </div>
+                      {/* Informational description box */}
+                      <div className="bg-white p-3 rounded-xl border border-gray-200 flex items-start gap-2.5 text-xs text-gray-600">
+                        <div className="p-1 bg-black text-white rounded text-[10px] font-black uppercase shrink-0 mt-0.5">
+                          {getLookbookPresetBadge(newLookbook.className)}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-[11px] text-gray-600 font-medium">
+                            {LOOKBOOK_GRID_PRESETS.find(p => p.id === newLookbook.className)?.desc || 'Custom Tailwind CSS layout class applied.'}
+                          </p>
+                        </div>
+                      </div>
 
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Grid Layout / গ্রিড সাইজ</label>
-                      <select 
-                        className="w-full border border-gray-200 rounded-xl p-3 text-sm font-bold focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors appearance-none" 
-                        value={newLookbook.className === 'md:col-span-2 md:row-span-2' ? 'large' : 
-                               newLookbook.className === 'md:col-span-2' ? 'wide' : 
-                               newLookbook.className === 'md:row-span-2' ? 'tall' : 
-                               newLookbook.className === '' ? 'normal' : 'custom'} 
-                        onChange={e => {
-                          const val = e.target.value;
-                          if (val === 'normal') setNewLookbook({...newLookbook, className: ''});
-                          else if (val === 'large') setNewLookbook({...newLookbook, className: 'md:col-span-2 md:row-span-2'});
-                          else if (val === 'wide') setNewLookbook({...newLookbook, className: 'md:col-span-2'});
-                          else if (val === 'tall') setNewLookbook({...newLookbook, className: 'md:row-span-2'});
-                        }}
-                      >
-                        <option value="normal">Normal (1x1)</option>
-                        <option value="large">Large Square (2x2)</option>
-                        <option value="wide">Wide (2x1)</option>
-                        <option value="tall">Tall (1x2)</option>
-                        <option value="custom">Custom (Advanced)</option>
-                      </select>
-                      <p className="text-[9px] text-gray-400 mt-1 font-medium italic">
-                        * Normal: 1x1, Large: 2x2 grid space, Wide: Takes 2 columns, Tall: Takes 2 rows.
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Custom Class (Advanced)</label>
-                      <input className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" value={newLookbook.className} onChange={e=>setNewLookbook({...newLookbook, className: e.target.value})} placeholder="যেমন - md:col-span-2 md:row-span-2" />
+                      {/* Custom class input */}
+                      <div className="flex items-center gap-2 pt-1">
+                        <span className="text-[10px] font-mono text-gray-400 shrink-0">Custom Tailwind Class:</span>
+                        <input 
+                          className="flex-1 border border-gray-200 rounded-lg p-2 text-xs font-mono focus:ring-1 focus:ring-black focus:outline-none bg-white" 
+                          value={newLookbook.className} 
+                          onChange={e => setNewLookbook({ ...newLookbook, className: e.target.value })} 
+                          placeholder="e.g. col-span-2 row-span-2" 
+                        />
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category Link (ক্যাটাগরি রাউটার)</label>
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Quick Category Link</label>
                         <select 
                           className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors"
                           onChange={e => {
@@ -7114,8 +7703,13 @@ export default function AdminDashboard() {
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Destination Link (Optional)</label>
-                        <input className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" value={newLookbook.link} onChange={e=>setNewLookbook({...newLookbook, link: e.target.value})} placeholder="যেমন- /shop?category=Basic" />
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Custom Destination URL (Optional)</label>
+                        <input 
+                          className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors" 
+                          value={newLookbook.link} 
+                          onChange={e => setNewLookbook({...newLookbook, link: e.target.value})} 
+                          placeholder="e.g. /shop?category=Basic" 
+                        />
                       </div>
                     </div>
 
@@ -7131,7 +7725,7 @@ export default function AdminDashboard() {
                         Cancel
                       </button>
                       <button type="submit" className="bg-black text-white px-8 py-3 rounded-xl font-black uppercase tracking-widest text-xs shadow-xl shadow-black/10 active:scale-95 transition-transform">
-                        {editingLookbook ? 'Update Lookbook Image' : 'Save Lookbook Image'}
+                        {editingLookbook ? 'Update Lookbook Item' : 'Save Lookbook Item'}
                       </button>
                     </div>
                   </form>
@@ -7139,91 +7733,107 @@ export default function AdminDashboard() {
               </div>
             )}
 
-            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+            <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
               <table className="w-full text-left text-sm">
-                <thead className="bg-gray-50 border-b border-gray-100 animate-fade-in">
+                <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Serial</th>
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Title</th>
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Image</th>
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Link Destination</th>
-                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Layout Style</th>
+                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Grid Layout Dimension</th>
                      <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
                   {[...lookbook]
                     .sort((a, b) => (a.serial || 0) - (b.serial || 0))
-                    .map(l => (
+                    .map((l, idx, arr) => (
                       <tr key={l.id} className="hover:bg-gray-50 transition-colors">
-                        <td className="p-4 font-black text-gray-900 text-sm">#{l.serial || 0}</td>
+                        <td className="p-4 font-black text-gray-900 text-sm">
+                          <div className="flex items-center gap-2">
+                            <span>#{l.serial || 0}</span>
+                            <div className="flex flex-col gap-0.5">
+                              {idx > 0 && (
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const prev = arr[idx - 1];
+                                    updateLookbookImage({ ...l, serial: prev.serial });
+                                    updateLookbookImage({ ...prev, serial: l.serial });
+                                  }}
+                                  className="text-[10px] bg-gray-100 hover:bg-black hover:text-white px-1.5 py-0.5 rounded font-bold transition-colors"
+                                  title="Move Up"
+                                >
+                                  ▲
+                                </button>
+                              )}
+                              {idx < arr.length - 1 && (
+                                <button 
+                                  type="button"
+                                  onClick={() => {
+                                    const next = arr[idx + 1];
+                                    updateLookbookImage({ ...l, serial: next.serial });
+                                    updateLookbookImage({ ...next, serial: l.serial });
+                                  }}
+                                  className="text-[10px] bg-gray-100 hover:bg-black hover:text-white px-1.5 py-0.5 rounded font-bold transition-colors"
+                                  title="Move Down"
+                                >
+                                  ▼
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </td>
                         <td className="p-4 font-bold text-gray-800">{l.title || <span className="text-gray-300 font-normal">None</span>}</td>
                         <td className="p-4">
-                          {l.image && <img src={l.image} className="w-16 h-16 rounded object-cover shadow-sm border border-gray-200" alt="" />}
+                          {l.image && <img src={l.image} className="w-16 h-16 rounded-xl object-cover shadow-sm border border-gray-200" alt="" />}
                         </td>
                         <td className="p-4 font-mono text-xs text-gray-600">{l.link || '/shop'}</td>
-                        <td className="p-4 text-xs font-mono text-gray-400">
-                          {l.className === 'md:col-span-2 md:row-span-2' ? 'Large (2x2)' : 
-                           l.className === 'md:col-span-2' ? 'Wide (2x1)' : 
-                           l.className === 'md:row-span-2' ? 'Tall (1x2)' : 
-                           l.className === '' ? 'Normal (1x1)' : 
-                           (l.className || 'Default')}
+                        <td className="p-4 text-xs">
+                          <span className="inline-flex items-center px-2.5 py-1 bg-gray-100 text-gray-800 rounded-lg text-[11px] font-bold border border-gray-200">
+                            {getLookbookPresetBadge(l.className)}
+                          </span>
+                          <span className="block text-[10px] font-mono text-gray-400 mt-0.5">{l.className || 'col-span-1 row-span-1'}</span>
                         </td>
                         <td className="p-4 text-right">
-                          <div className="flex items-center justify-end gap-1">
-                            <button 
-                              onClick={() => moveLookbookImage(l.id, 'up')}
-                              className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors"
-                              title="Move Up"
-                            >
-                              <ArrowUp className="h-4 w-4"/>
-                            </button>
-                            <button 
-                              onClick={() => moveLookbookImage(l.id, 'down')}
-                              className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-lg transition-colors"
-                              title="Move Down"
-                            >
-                              <ArrowDown className="h-4 w-4"/>
-                            </button>
-                            <div className="w-px h-4 bg-gray-200 mx-1" />
-                            <button 
-                              onClick={() => {
-                                setEditingLookbook(l);
-                                setNewLookbook({
-                                  image: l.image,
-                                  link: l.link,
-                                  className: l.className || '',
-                                  widthPercent: l.widthPercent || '100%',
-                                  serial: l.serial || 1,
-                                  title: l.title || ''
-                                });
-                                setIsAddingLookbook(true);
-                              }} 
-                              className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg"
-                              title="Edit Item"
-                            >
-                              <Edit className="h-5 w-5"/>
-                            </button>
-                            <button onClick={async () => {
-                              const result = await Swal.fire({
-                                title: 'Are you sure?',
-                                text: "Delete this lookbook image?",
-                                icon: 'warning',
-                                showCancelButton: true,
-                                confirmButtonColor: '#000',
-                                cancelButtonColor: '#d33',
-                                confirmButtonText: 'Yes, delete it!'
+                          <button 
+                            onClick={() => {
+                              setEditingLookbook(l);
+                              setNewLookbook({
+                                image: l.image,
+                                link: l.link,
+                                className: l.className || 'col-span-1 row-span-1',
+                                widthPercent: l.widthPercent || '100%',
+                                serial: l.serial || 1,
+                                title: l.title || ''
                               });
-                              if (result.isConfirmed) {
-                                deleteLookbookImage(l.id);
-                                Swal.fire('Deleted!', 'Lookbook image has been deleted.', 'success');
-                              }
-                            }} className="text-red-500 hover:bg-red-50 p-2 rounded-lg" title="Delete Item"><Trash2 className="h-5 w-5"/></button>
-                          </div>
+                              setIsAddingLookbook(true);
+                            }} 
+                            className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg inline-block mr-2 transition-colors"
+                            title="Edit Item"
+                          >
+                            <Edit className="h-5 w-5"/>
+                          </button>
+                          <button onClick={async () => {
+                            const result = await Swal.fire({
+                              title: 'Are you sure?',
+                              text: "Delete this lookbook item?",
+                              icon: 'warning',
+                              showCancelButton: true,
+                              confirmButtonColor: '#000',
+                              cancelButtonColor: '#d33',
+                              confirmButtonText: 'Yes, delete it!'
+                            });
+                            if (result.isConfirmed) {
+                              deleteLookbookImage(l.id);
+                              Swal.fire('Deleted!', 'Lookbook item has been deleted.', 'success');
+                            }
+                          }} className="text-red-500 hover:bg-red-50 p-2 rounded-lg transition-colors" title="Delete Item"><Trash2 className="h-5 w-5"/></button>
                         </td>
                       </tr>
                     ))}
-                  {lookbook.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-gray-500">No lookbook images found.</td></tr>}
+                  {lookbook.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-gray-500">No lookbook items found.</td></tr>}
                 </tbody>
               </table>
             </div>

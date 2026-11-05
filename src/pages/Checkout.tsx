@@ -211,7 +211,7 @@ export default function Checkout() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: formData.email, order: newOrderObj })
       }).catch(err => {
-        console.error('Failed to send invoice email in background:', err);
+        console.warn('Failed to send invoice email in background:', err);
       });
       
       setIsSendingEmail(false);

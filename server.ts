@@ -14,7 +14,9 @@ dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "neonthread_secure_fallback_secret_key";
 
-const DB_FILE = path.join(process.cwd(), "db.json");
+const DB_FILE = process.env.VERCEL
+  ? path.join('/tmp', 'db.json')
+  : path.join(process.cwd(), 'db.json');
 
 const COLLECTION_KEYS = [
   "products",
@@ -44,16 +46,35 @@ const COLLECTION_KEYS = [
 let mongoClient: MongoClient | null = null;
 let mongoDb: Db | null = null;
 let lastMongoError: string | null = null;
+let mongoConnectPromise: Promise<Db | null> | null = null;
+let lastPingTime = 0;
 
 async function getMongoDb(): Promise<Db | null> {
   const envUri = process.env.MONGODB_URI;
   if (!envUri) {
-    lastMongoError = "MONGODB_URI environment variable is missing entirely.";
+    lastMongoError = "MONGODB_URI environment variable is missing in project settings.";
     return null;
   }
-  if (!mongoDb) {
-    // Robustly clean angle brackets if the user kept them by mistake, e.g.:
-    // mongodb+srv://<TShirt_Store>:<rtyfghcvb>@cluster0...
+
+  // Reuse existing healthy connection, pinging at most once every 60s
+  if (mongoClient && mongoDb) {
+    if (Date.now() - lastPingTime > 60000) {
+      lastPingTime = Date.now();
+      mongoDb.command({ ping: 1 }).catch(() => {
+        console.log("MongoDB connection stale. Resetting client for reconnect...");
+        mongoClient = null;
+        mongoDb = null;
+      });
+    }
+    return mongoDb;
+  }
+
+  // Deduplicate concurrent connection attempts (singleton promise)
+  if (mongoConnectPromise) {
+    return mongoConnectPromise;
+  }
+
+  mongoConnectPromise = (async () => {
     let cleanUri = envUri;
     
     // Replace <username> and <password> formatting
@@ -61,7 +82,7 @@ async function getMongoDb(): Promise<Db | null> {
     const match = cleanUri.match(regex);
     if (match) {
       const scheme = match[1]; // mongodb+srv:// or mongodb://
-      const rest = match[2];   // <TShirt_Store>:<rtyfghcvb>@cluster0.qnlpi.mongodb.net
+      const rest = match[2];
       
       const parts = rest.split("@");
       if (parts.length >= 2) {
@@ -79,8 +100,6 @@ async function getMongoDb(): Promise<Db | null> {
             pass = pass.slice(1, -1);
           }
           
-          // Atlas username is case-sensitive and registered as 'Tshirt_Store' (lowercase 's').
-          // If the user supplied 'TShirt_Store' or any other case variant, we map it correctly.
           if (user.toLowerCase() === "tshirt_store") {
             user = "Tshirt_Store";
           }
@@ -91,117 +110,213 @@ async function getMongoDb(): Promise<Db | null> {
     }
 
     try {
-      console.log("Connecting to MongoDB...");
+      console.log("Connecting to MongoDB with high-speed pool and wire compression...");
       mongoClient = new MongoClient(cleanUri, {
-        serverSelectionTimeoutMS: 3000 // 3 seconds timeout before fallback so app doesn't hang
+        serverSelectionTimeoutMS: 5000,
+        connectTimeoutMS: 8000,
+        maxPoolSize: 30,
+        minPoolSize: 2,
+        maxIdleTimeMS: 60000,
+        socketTimeoutMS: 20000,
+        compressors: ['zlib']
       });
       await mongoClient.connect();
       mongoDb = mongoClient.db("neonthread_db");
       console.log("Connected successfully to MongoDB database: neonthread_db!");
       lastMongoError = null;
+      lastPingTime = Date.now();
+      return mongoDb;
     } catch (err: any) {
       lastMongoError = err.message || String(err);
-      console.error("Failed to connect to MongoDB, falling back to local file DB. Error detail:", lastMongoError);
+      console.error("Failed to connect to MongoDB. Error detail:", lastMongoError);
+      mongoClient = null;
+      mongoDb = null;
       return null;
+    } finally {
+      mongoConnectPromise = null;
     }
-  }
-  return mongoDb;
+  })();
+
+  return mongoConnectPromise;
 }
 
+function sanitizePublicDb(rawDb: any) {
+  if (!rawDb) return {};
+  const db: any = { ...rawDb };
+  if (db.products) {
+    db.products = db.products.filter((p: any) => !p.deleted).map((product: any) => {
+      const { costPrice, ...rest } = product;
+      return rest;
+    });
+  }
+  if (db.admins) {
+    db.admins = db.admins.filter((a: any) => a.isActive !== false).map((admin: any) => {
+      const { password, ...rest } = admin;
+      return rest;
+    });
+  }
+  if (db.faqs) db.faqs = db.faqs.filter((f: any) => !f.deleted);
+  if (db.policies) db.policies = db.policies.filter((p: any) => !p.deleted);
+  if (db.coupons) db.coupons = db.coupons.filter((c: any) => !c.deleted);
+  if (db.slides) db.slides = db.slides.filter((s: any) => !s.deleted);
+  if (db.orders) db.orders = db.orders.filter((o: any) => !o.deleted);
+  if (db.categories) db.categories = db.categories.filter((c: any) => !c.deleted);
+  if (db.reviews) db.reviews = db.reviews.filter((r: any) => !r.deleted);
+  if (db.subscribers) db.subscribers = db.subscribers.filter((s: any) => !s.deleted);
+  if (db.contactMessages) db.contactMessages = db.contactMessages.filter((m: any) => !m.deleted);
+  if (db.popupAds) db.popupAds = db.popupAds.filter((a: any) => !a.deleted);
+  if (db.homeAds) db.homeAds = db.homeAds.filter((a: any) => !a.deleted);
+  if (db.announcements) db.announcements = db.announcements.filter((a: any) => !a.deleted);
+  if (db.otps) db.otps = db.otps.filter((o: any) => !o.deleted);
+  return db;
+}
+
+let cachedPublicDb: any = null;
+let cachedPublicDbTime = 0;
 let memoryDbCache: any = null;
 let memoryCacheTimestamp = 0;
-const CACHE_TTL_MS = 5 * 60 * 1000; // Increased to 5 minutes for better performance
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache for fast response times
+let isBackgroundSyncRunning = false;
+let pendingMongoFetchPromise: Promise<any> | null = null;
+
+async function saveDiskCacheSnapshot(dbObj: any) {
+  try {
+    if (!dbObj || typeof dbObj !== 'object') return;
+    await fs.writeFile(DB_FILE, JSON.stringify(dbObj, null, 2), "utf-8");
+  } catch (err) {
+    // Non-fatal disk cache write notice
+  }
+}
+
+// Fetch all collections in parallel from MongoDB with safe query timeout
+async function fetchMongoData(): Promise<any | null> {
+  const mongo = await getMongoDb();
+  if (!mongo) return null;
+
+  try {
+    const dbObj: any = {};
+    const results = await Promise.allSettled(
+      COLLECTION_KEYS.map(async (key) => {
+        if (["maintenance_mode", "contactInfo", "wishlist", "comparison"].includes(key)) {
+          const doc = await mongo.collection(key).findOne({ _id: "singleton" as any }, { maxTimeMS: 6000 });
+          return { key, data: doc && doc.value !== undefined ? doc.value : null };
+        } else {
+          const docs = await mongo.collection(key).find({}, { maxTimeMS: 6000 }).toArray();
+          const mapped = docs.map((doc: any) => {
+            const item = { ...doc };
+            if (doc._id && !doc.id) {
+              item.id = doc._id.toString();
+            }
+            delete item._id;
+            return item;
+          });
+          return { key, data: mapped };
+        }
+      })
+    );
+
+    results.forEach((res) => {
+      if (res.status === "fulfilled") {
+        dbObj[res.value.key] = res.value.data;
+      }
+    });
+
+    const hasData = COLLECTION_KEYS.some((key) => dbObj[key] && Array.isArray(dbObj[key]) && dbObj[key].length > 0);
+    if (hasData) {
+      if (dbObj.admins) {
+        const initialCount = dbObj.admins.length;
+        dbObj.admins = dbObj.admins.filter((a: any) => a.email !== 'admin@tbari.com');
+        if (dbObj.admins.length < initialCount) {
+          mongo.collection('admins').updateMany({ email: 'admin@tbari.com' }, { $set: { isActive: false } }).catch(() => {});
+        }
+      }
+
+      memoryDbCache = dbObj;
+      memoryCacheTimestamp = Date.now();
+      cachedPublicDb = sanitizePublicDb(dbObj);
+      cachedPublicDbTime = Date.now();
+      // Persist snapshot to disk cache asynchronously
+      saveDiskCacheSnapshot(dbObj).catch(() => {});
+      return dbObj;
+    }
+    return null;
+  } catch (err: any) {
+    console.error("fetchMongoData error:", err.message || err);
+    return null;
+  }
+}
+
+// Pre-warm cache on startup so the very first request receives instant (< 5ms) response
+readDbFromFileOnly().then((fileDb) => {
+  if (fileDb && !memoryDbCache) {
+    memoryDbCache = fileDb;
+    memoryCacheTimestamp = Date.now();
+    cachedPublicDb = sanitizePublicDb(fileDb);
+    cachedPublicDbTime = Date.now();
+    console.log("Memory DB pre-warmed from disk cache for instant responses.");
+  }
+  // Connect and sync with MongoDB asynchronously in background without blocking API requests
+  refreshMongoInBackground().catch((e) => console.log("Background MongoDB sync notice:", e?.message || e));
+}).catch(() => {});
+
+async function refreshMongoInBackground() {
+  if (isBackgroundSyncRunning) return;
+  isBackgroundSyncRunning = true;
+  try {
+    await fetchMongoData();
+  } catch (err: any) {
+    console.error("Background MongoDB refresh error:", err.message);
+  } finally {
+    isBackgroundSyncRunning = false;
+  }
+}
 
 async function readDb(forceFresh = false) {
+  // 1. If we have fresh cached memory data, return immediately (< 1ms)
   if (!forceFresh && memoryDbCache && (Date.now() - memoryCacheTimestamp < CACHE_TTL_MS)) {
     return memoryDbCache;
   }
 
-  const mongo = await getMongoDb();
-  if (mongo) {
-    try {
-      const dbObj: any = {};
-      
-      // Load all collections in parallel for maximum speed
-      // Using Promise.allSettled to ensure one failure doesn't block the whole load
-      const results = await Promise.allSettled(
-        COLLECTION_KEYS.map(async (key) => {
-          if (["maintenance_mode", "contactInfo", "wishlist", "comparison"].includes(key)) {
-            const doc = await mongo.collection(key).findOne({ _id: "singleton" as any });
-            return { key, data: doc && doc.value !== undefined ? doc.value : null };
-          } else {
-            const docs = await mongo.collection(key).find({}).toArray();
-            const mapped = docs.map((doc: any) => {
-              const item = { ...doc };
-              if (doc._id && !doc.id) {
-                item.id = doc._id.toString();
-              }
-              delete item._id;
-              return item;
-            });
-            return { key, data: mapped };
-          }
-        })
-      );
+  // 2. If memory cache exists but is expired, return stale data immediately and refresh in background
+  if (!forceFresh && memoryDbCache) {
+    refreshMongoInBackground();
+    return memoryDbCache;
+  }
 
-      results.forEach((res) => {
-        if (res.status === "fulfilled") {
-          dbObj[res.value.key] = res.value.data;
-        } else {
-          console.error(`Failed to load collection during readDb:`, res.reason);
-        }
-      });
-
-      // Check if we retrieved actual data (at least one collection has items)
-      const hasData = COLLECTION_KEYS.some((key) => dbObj[key] && Array.isArray(dbObj[key]) && dbObj[key].length > 0);
-      
-      // Cleanup specifically requested by user: remove admin@tbari.com
-      if (hasData && dbObj.admins) {
-        const initialCount = dbObj.admins.length;
-        dbObj.admins = dbObj.admins.filter((a: any) => a.email !== 'admin@tbari.com');
-        if (dbObj.admins.length < initialCount) {
-          console.log("Cleanup: Removed forbidden admin email. Syncing to MongoDB...");
-          if (mongo) {
-             await mongo.collection('admins').updateMany({ email: 'admin@tbari.com' }, { $set: { isActive: false } });
-          }
-        }
-      }
-
-      if (hasData) {
-        memoryDbCache = dbObj;
-        memoryCacheTimestamp = Date.now();
-        return dbObj;
-      } else {
-        // Automatically migrate server-side local storage db.json to individual MongoDB collections
-        // Only if MongoDB is truly empty (no data in any expected collection)
-        console.log("MongoDB is connected but collections are empty. Checking migration from local db.json...");
-        const fileDb = await readDbFromFileOnly();
-        const hasFileData = fileDb && COLLECTION_KEYS.some(key => fileDb[key] && Array.isArray(fileDb[key]) && fileDb[key].length > 0);
-        
-        if (hasFileData) {
-          console.log("Migrating local db.json data to MongoDB...");
-          await writeDb(fileDb);
-          memoryDbCache = fileDb;
-          memoryCacheTimestamp = Date.now();
-          return fileDb;
-        }
-      }
-      
-      // Fallback: If we have some keys but no "hasData", return what we got
-      memoryDbCache = dbObj;
+  // 3. If memoryDbCache is not yet set, try reading from disk cache first for zero-latency response
+  if (!forceFresh && !memoryDbCache) {
+    const fileDb = await readDbFromFileOnly();
+    if (fileDb) {
+      memoryDbCache = fileDb;
       memoryCacheTimestamp = Date.now();
-      return dbObj;
-    } catch (err) {
-      console.error("Error reading from MongoDB individual collections, falling back to local file:", err);
+      cachedPublicDb = sanitizePublicDb(fileDb);
+      cachedPublicDbTime = Date.now();
+      refreshMongoInBackground();
+      return fileDb;
     }
   }
 
+  // 4. If forceFresh or no cache exists at all, fetch live data (deduplicating concurrent calls)
+  if (!pendingMongoFetchPromise) {
+    pendingMongoFetchPromise = fetchMongoData().finally(() => {
+      pendingMongoFetchPromise = null;
+    });
+  }
+
+  const liveData = await pendingMongoFetchPromise;
+  if (liveData) {
+    return liveData;
+  }
+
+  // 5. Fallback to local disk file if live fetch didn't return data
   const fileDb = await readDbFromFileOnly();
   if (fileDb) {
     memoryDbCache = fileDb;
     memoryCacheTimestamp = Date.now();
+    return fileDb;
   }
-  return fileDb;
+
+  return memoryDbCache || {};
 }
 
 async function readDbFromFileOnly() {
@@ -209,6 +324,14 @@ async function readDbFromFileOnly() {
     const data = await fs.readFile(DB_FILE, "utf-8");
     return JSON.parse(data);
   } catch (err) {
+    if (process.env.VERCEL) {
+      try {
+        const rootData = await fs.readFile(path.join(process.cwd(), "db.json"), "utf-8");
+        return JSON.parse(rootData);
+      } catch (e) {
+        return null;
+      }
+    }
     return null;
   }
 }
@@ -248,10 +371,24 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
   const currentPromise = writeLocks[key] || Promise.resolve();
   
   const nextPromise = currentPromise.then(async () => {
-    // Immediately update memory cache for zero-latency consistency
+    // Immediately update memory cache and public cache for zero-latency consistency
     if (memoryDbCache) {
-      memoryDbCache[key] = data;
+      if (Array.isArray(data) && Array.isArray(memoryDbCache[key])) {
+        const itemMap = new Map();
+        memoryDbCache[key].forEach((item: any) => {
+          if (item && item.id) itemMap.set(String(item.id), item);
+        });
+        data.forEach((item: any) => {
+          if (item && item.id) itemMap.set(String(item.id), item);
+        });
+        memoryDbCache[key] = Array.from(itemMap.values());
+      } else {
+        memoryDbCache[key] = data;
+      }
       memoryCacheTimestamp = Date.now();
+      cachedPublicDb = sanitizePublicDb(memoryDbCache);
+      cachedPublicDbTime = Date.now();
+      saveDiskCacheSnapshot(memoryDbCache).catch(() => {});
     }
 
     const mongo = await getMongoDb();
@@ -266,11 +403,7 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
 
         const array = Array.isArray(data) ? data : [];
         
-        // 1. Get all existing IDs in the collection
-        const existingDocs = await col.find({}, { projection: { _id: 1 } }).toArray();
-        const existingIds = existingDocs.map(d => d._id.toString());
-        
-        // 2. Prepare bulk operations
+        // Prepare bulk operations without redundant find query
         const newDocIds = new Set<string>();
         const bulkOps: any[] = [];
         
@@ -297,10 +430,10 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
           }
         }
 
-        // 3. Identification of missing documents for deletion is REMOVED to comply with the "Strict Additive-Only" rule.
+        // Identification of missing documents for deletion is REMOVED to comply with the "Strict Additive-Only" rule.
         // Data is never removed from the database; only soft-deletes (deleted: true) are performed by the client.
         
-        // 4. Execute all operations in a single bulk request
+        // Execute all operations in a single bulk request
         if (bulkOps.length > 0) {
           await col.bulkWrite(bulkOps, { ordered: false });
         }
@@ -428,8 +561,8 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     return false;
   };
 
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  app.use(express.json({ limit: "200mb" }));
+  app.use(express.urlencoded({ limit: "200mb", extended: true }));
 
   console.log("Middleware configured, starting Vite if needed...");
 
@@ -519,41 +652,26 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
 
   app.get("/api/db", async (req, res) => {
     try {
+      res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
+
+      // Ultra-fast path: Return in-memory cached public DB instantly (< 1ms)
+      if (cachedPublicDb) {
+        // If cache is older than 30 seconds, trigger background sync without delaying the user
+        if (Date.now() - cachedPublicDbTime > 30000) {
+          refreshMongoInBackground();
+        }
+        return res.json(cachedPublicDb);
+      }
+
+      // Fast fallback to memory or disk cache (< 15ms)
       const rawDb = await readDb();
       if (!rawDb) return res.json({});
       
-      // Clone so we don't mutate memory cache directly
-      const db: any = { ...rawDb };
-      // SECURITY: Sanitize admins to remove passwords and products to remove cost prices from general fetch
-      if (db.products) {
-        db.products = db.products.filter((p: any) => !p.deleted).map((product: any) => {
-          const { costPrice, ...rest } = product;
-          return rest;
-        });
-      }
-      if (db.admins) {
-        db.admins = db.admins.filter((a: any) => a.isActive !== false).map((admin: any) => {
-          const { password, ...rest } = admin;
-          return rest;
-        });
-      }
-      // Apply filtering to other major collections too
-      if (db.faqs) db.faqs = db.faqs.filter((f: any) => !f.deleted);
-      if (db.policies) db.policies = db.policies.filter((p: any) => !p.deleted);
-      if (db.coupons) db.coupons = db.coupons.filter((c: any) => !c.deleted);
-      if (db.slides) db.slides = db.slides.filter((s: any) => !s.deleted);
-      if (db.orders) db.orders = db.orders.filter((o: any) => !o.deleted);
-      if (db.categories) db.categories = db.categories.filter((c: any) => !c.deleted);
-      if (db.reviews) db.reviews = db.reviews.filter((r: any) => !r.deleted);
-      if (db.subscribers) db.subscribers = db.subscribers.filter((s: any) => !s.deleted);
-      if (db.contactMessages) db.contactMessages = db.contactMessages.filter((m: any) => !m.deleted);
-      if (db.popupAds) db.popupAds = db.popupAds.filter((a: any) => !a.deleted);
-      if (db.homeAds) db.homeAds = db.homeAds.filter((a: any) => !a.deleted);
-      if (db.announcements) db.announcements = db.announcements.filter((a: any) => !a.deleted);
-      if (db.otps) db.otps = db.otps.filter((o: any) => !o.deleted);
+      const sanitized = sanitizePublicDb(rawDb);
+      cachedPublicDb = sanitized;
+      cachedPublicDbTime = Date.now();
 
-      res.setHeader("Cache-Control", "public, max-age=10, stale-while-revalidate=30");
-      res.json(db);
+      res.json(sanitized);
     } catch (err: any) {
       console.error("Error in GET /api/db:", err);
       res.status(500).json({ error: err.message });
@@ -1119,22 +1237,19 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
     }
   });
 
+  // Global Express error handler for json parser errors (e.g. 413 Payload Too Large) and others
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (err.status === 413 || err.type === 'entity.too.large') {
+      return res.status(413).json({ error: "Payload too large. Please compress images before saving." });
+    }
+    console.warn("Server request notice:", err.message || err);
+    res.status(err.status || 500).json({ error: err.message || "Internal server error" });
+  });
+
   if (!process.env.VERCEL) {
     const PORT = Number(process.env.PORT) || 3000;
-    const server = app.listen(PORT, "0.0.0.0", () => {
+    app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);
-    });
-    server.on("error", (err: any) => {
-      if (err.code === "EADDRINUSE") {
-        console.warn(`Port ${PORT} is in use, retrying on port ${PORT + 1}...`);
-        setTimeout(() => {
-          app.listen(PORT + 1, "0.0.0.0", () => {
-            console.log(`Server running on http://localhost:${PORT + 1}`);
-          });
-        }, 1000);
-      } else {
-        console.error("Server error:", err);
-      }
     });
   }
 

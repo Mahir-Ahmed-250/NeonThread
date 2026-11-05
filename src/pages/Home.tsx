@@ -1,25 +1,41 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, ShieldCheck, Truck, RotateCcw } from 'lucide-react';
+import { ChevronRight, ChevronLeft, ShieldCheck, Truck, Banknote } from 'lucide-react';
 import { useShop } from '../ShopContext';
 import ProductCard from '../components/ProductCard';
-import { ProductCardSkeleton } from '../components/Skeleton';
+import { ProductCardSkeleton, ImageWithSkeleton } from '../components/Skeleton';
 import Swal from 'sweetalert2';
 
 export default function Home() {
-  const { products, slides, categoryBanners, lookbook, homeAds, addSubscriber } = useShop();
+  const { products, slides, categoryBanners, lookbook, homeAds, addSubscriber, isDbLoaded } = useShop();
   const [currentSlide, setCurrentSlide] = useState(0);
   const [subEmail, setSubEmail] = useState('');
-  const [loading, setLoading] = useState(products.length === 0);
+  const [loading, setLoading] = useState(!isDbLoaded);
 
   const hotProducts = products.filter(p => p.isHotSale).slice(0, 4);
+  const displayHotProducts = hotProducts.length > 0 ? hotProducts : products.slice(0, 4);
+  const displayCollectionProducts = (
+    products.filter(p => p.isCollection).length > 0
+      ? products.filter(p => p.isCollection)
+      : products
+  )
+    .sort((a, b) => (a.serial || 0) - (b.serial || 0))
+    .slice(0, 5);
+
+  const activeSlides = slides.filter(s => !s.deleted);
 
   useEffect(() => {
-    if (products.length > 0) {
+    if (isDbLoaded) {
       setLoading(false);
     }
-  }, [products.length]);
+  }, [isDbLoaded]);
+
+  useEffect(() => {
+    if (activeSlides.length > 0 && currentSlide >= activeSlides.length) {
+      setCurrentSlide(0);
+    }
+  }, [activeSlides.length, currentSlide]);
 
   const handleSubscribe = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,14 +47,15 @@ export default function Home() {
   };
 
   useEffect(() => {
+    if (activeSlides.length <= 1) return;
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
+      setCurrentSlide((prev) => (prev >= activeSlides.length - 1 ? 0 : prev + 1));
     }, 5000);
     return () => clearInterval(timer);
-  }, []);
+  }, [activeSlides.length]);
 
-  const nextSlide = () => setCurrentSlide((prev) => (prev === slides.length - 1 ? 0 : prev + 1));
-  const prevSlide = () => setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1));
+  const nextSlide = () => setCurrentSlide((prev) => (prev === activeSlides.length - 1 ? 0 : prev + 1));
+  const prevSlide = () => setCurrentSlide((prev) => (prev === 0 ? activeSlides.length - 1 : prev - 1));
 
   return (
     <motion.div 
@@ -49,86 +66,95 @@ export default function Home() {
     >
       {/* Hero Carousel */}
       <div className="px-4 sm:px-6 lg:px-8 pt-6 max-w-screen-2xl mx-auto w-full">
-        <div className="relative h-[45vh] sm:h-[60vh] w-full overflow-hidden bg-gray-900 rounded-3xl group">
-        <AnimatePresence initial={false}>
-          {slides.map((slide, index) => (
-            index === currentSlide && (
-              <motion.div
-                key={slide.id}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.8 }}
-                className="absolute inset-0"
-              >
-                <div className="absolute inset-0 bg-black/40 z-10" />
-                {slide.image ? (
-                  <img
-                    src={slide.image}
-                    alt={slide.title}
-                    loading={index === 0 ? "eager" : "lazy"}
-                    decoding="async"
-                    fetchPriority={index === 0 ? "high" : "auto"}
-                    className="w-full h-full object-cover object-center"
-                  />
-                ) : null}
-                <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
-                  <motion.span
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.1, duration: 0.8 }}
-                    className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-full mb-6"
-                  >
-                    {slide.tagText || 'Featured'}
-                  </motion.span>
-                  <motion.h1
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.2, duration: 0.8 }}
-                    className="text-2xl sm:text-5xl md:text-7xl font-black text-white leading-none mb-3 sm:mb-4 uppercase"
-                  >
-                    {slide.title}
-                  </motion.h1>
-                  <motion.p
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.4, duration: 0.8 }}
-                    className="text-xs sm:text-base md:text-lg text-gray-200 mb-6 sm:mb-8 max-w-2xl font-medium"
-                  >
-                    {slide.subtitle}
-                  </motion.p>
+        {!isDbLoaded || activeSlides.length === 0 ? (
+          <div className="relative h-[45vh] sm:h-[60vh] w-full overflow-hidden bg-gray-900 rounded-3xl animate-pulse flex flex-col items-center justify-center p-6 text-center">
+            <div className="h-6 w-24 bg-white/10 rounded-full mb-6" />
+            <div className="h-10 sm:h-16 w-3/4 max-w-xl bg-white/10 rounded-2xl mb-4" />
+            <div className="h-4 w-1/2 max-w-md bg-white/10 rounded-lg mb-8" />
+            <div className="h-12 w-36 bg-white/20 rounded-xl" />
+          </div>
+        ) : (
+          <div className="relative h-[45vh] sm:h-[60vh] w-full overflow-hidden bg-gray-900 rounded-3xl group">
+            <AnimatePresence mode="wait">
+              {activeSlides.map((slide, index) => (
+                index === currentSlide && (
                   <motion.div
-                    initial={{ y: 20, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    transition={{ delay: 0.6, duration: 0.8 }}
+                    key={slide.id}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.8 }}
+                    className="absolute inset-0"
                   >
-                    <Link
-                      to={slide.link || "/shop"}
-                      className="px-8 py-4 bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-gray-200 rounded-xl transition-all shadow-xl"
-                    >
-                      Shop Now
-                    </Link>
+                    <div className="absolute inset-0 bg-black/40 z-10 pointer-events-none" />
+                    {slide.image ? (
+                      <ImageWithSkeleton
+                        src={slide.image}
+                        alt={slide.title}
+                        dark={true}
+                        loading={index === 0 ? "eager" : "lazy"}
+                        className="w-full h-full"
+                        imageClassName="w-full h-full object-cover object-center"
+                      />
+                    ) : null}
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center text-center px-4">
+                      <motion.span
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.1, duration: 0.8 }}
+                        className="inline-block px-3 py-1 bg-white/10 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-widest rounded-full mb-6"
+                      >
+                        {slide.tagText || 'Featured'}
+                      </motion.span>
+                      <motion.h1
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.2, duration: 0.8 }}
+                        className="text-2xl sm:text-5xl md:text-7xl font-black text-white leading-none mb-3 sm:mb-4 uppercase"
+                      >
+                        {slide.title}
+                      </motion.h1>
+                      <motion.p
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.4, duration: 0.8 }}
+                        className="text-xs sm:text-base md:text-lg text-gray-200 mb-6 sm:mb-8 max-w-2xl font-medium"
+                      >
+                        {slide.subtitle}
+                      </motion.p>
+                      <motion.div
+                        initial={{ y: 20, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        transition={{ delay: 0.6, duration: 0.8 }}
+                      >
+                        <Link
+                          to={slide.link || "/shop"}
+                          className="px-8 py-4 bg-white text-black font-black text-xs uppercase tracking-widest hover:bg-gray-200 rounded-xl transition-all shadow-xl"
+                        >
+                          Shop Now
+                        </Link>
+                      </motion.div>
+                    </div>
                   </motion.div>
-                </div>
-              </motion.div>
-            )
-          ))}
-        </AnimatePresence>
-        
-        {/* Controls */}
-        <button
-          onClick={prevSlide}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm transition-all"
-        >
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-        <button
-          onClick={nextSlide}
-          className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm transition-all"
-        >
-          <ChevronRight className="h-6 w-6" />
-        </button>
-      </div>
+                )
+              ))}
+            </AnimatePresence>
+            
+            {/* Controls */}
+            <button
+              onClick={prevSlide}
+              className="absolute left-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm transition-all"
+            >
+              <ChevronLeft className="h-6 w-6" />
+            </button>
+            <button
+              onClick={nextSlide}
+              className="absolute right-4 top-1/2 -translate-y-1/2 z-30 p-2 bg-white/20 hover:bg-white/40 rounded-full text-white backdrop-blur-sm transition-all"
+            >
+              <ChevronRight className="h-6 w-6" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Hot Sales Section */}
@@ -147,10 +173,10 @@ export default function Home() {
         </div>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-          {loading ? (
+          {!isDbLoaded || displayHotProducts.length === 0 ? (
              Array(4).fill(0).map((_, i) => <ProductCardSkeleton key={i} />)
           ) : (
-            hotProducts.map(product => (
+            displayHotProducts.map(product => (
               <ProductCard key={product.id} product={product} />
             ))
           )}
@@ -172,27 +198,36 @@ export default function Home() {
         className="py-12 px-4 sm:px-6 lg:px-8 max-w-screen-2xl mx-auto w-full"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {categoryBanners.map(banner => (
-            <div key={banner.id} className="relative h-64 md:h-80 rounded-3xl overflow-hidden group">
-              {banner.image ? (
-                <img 
-                  src={banner.image} 
-                  alt={banner.title} 
-                  loading="lazy" 
-                  decoding="async" 
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
-                />
-              ) : null}
-              <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors duration-500" />
-              <div className="absolute inset-0 p-8 flex flex-col justify-end">
-                <span className="text-[10px] font-bold uppercase tracking-widest text-white/80 mb-2">{banner.subtitle}</span>
-                <h3 className="text-3xl font-black text-white uppercase leading-none mb-4 whitespace-pre-line">{banner.title}</h3>
-                <Link to={banner.link || "/shop"} className="bg-white text-black px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest self-start hover:bg-gray-100 transition-colors">
-                  Explore Now
-                </Link>
+          {!isDbLoaded || categoryBanners.length === 0 ? (
+            Array(2).fill(0).map((_, i) => (
+              <div key={i} className="h-64 md:h-80 rounded-3xl overflow-hidden bg-gray-200 dark:bg-gray-800 animate-pulse p-8 flex flex-col justify-end">
+                <div className="h-3 w-28 bg-gray-300 dark:bg-gray-700 rounded mb-3" />
+                <div className="h-8 w-56 bg-gray-300 dark:bg-gray-700 rounded mb-4" />
+                <div className="h-9 w-32 bg-gray-300 dark:bg-gray-700 rounded-lg" />
               </div>
-            </div>
-          ))}
+            ))
+          ) : (
+            categoryBanners.map(banner => (
+              <div key={banner.id} className="relative h-64 md:h-80 rounded-3xl overflow-hidden group">
+                {banner.image ? (
+                  <ImageWithSkeleton 
+                    src={banner.image} 
+                    alt={banner.title} 
+                    className="w-full h-full" 
+                    imageClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                  />
+                ) : null}
+                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors duration-500 pointer-events-none" />
+                <div className="absolute inset-0 p-8 flex flex-col justify-end z-20">
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-white/80 mb-2">{banner.subtitle}</span>
+                  <h3 className="text-3xl font-black text-white uppercase leading-none mb-4 whitespace-pre-line">{banner.title}</h3>
+                  <Link to={banner.link || "/shop"} className="bg-white text-black px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest self-start hover:bg-gray-100 transition-colors">
+                    Explore Now
+                  </Link>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </motion.section>
 
@@ -212,16 +247,12 @@ export default function Home() {
         </div>
         
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
-          {loading ? (
+          {!isDbLoaded || displayCollectionProducts.length === 0 ? (
              Array(5).fill(0).map((_, i) => <ProductCardSkeleton key={i} />)
           ) : (
-            products
-              .filter(p => p.isCollection)
-              .sort((a, b) => (a.serial || 0) - (b.serial || 0))
-              .slice(0, 5)
-              .map(product => (
-                <ProductCard key={product.id} product={product} />
-              ))
+            displayCollectionProducts.map(product => (
+              <ProductCard key={product.id} product={product} />
+            ))
           )}
         </div>
         
@@ -232,8 +263,16 @@ export default function Home() {
         </div>
       </motion.section>
 
-      {/* Dynamic Home Promo Ads Section (পাবলিশড হোম পেইজ বিজ্ঞাপনসমূহ) */}
-      {homeAds && homeAds.filter(ad => ad.isActive).length > 0 && (
+      {/* Dynamic Home Promo Ads Section */}
+      {!isDbLoaded ? (
+        <div className="py-8 px-4 sm:px-6 lg:px-8 max-w-screen-2xl mx-auto w-full">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
+            {Array(2).fill(0).map((_, i) => (
+              <div key={i} className="h-56 sm:h-64 rounded-3xl overflow-hidden bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 animate-pulse" />
+            ))}
+          </div>
+        </div>
+      ) : homeAds && homeAds.filter(ad => ad.isActive).length > 0 && (
         <motion.section 
           initial={{ opacity: 0, scale: 0.98 }}
           whileInView={{ opacity: 1, scale: 1 }}
@@ -249,14 +288,14 @@ export default function Home() {
                 className="relative block h-56 sm:h-64 rounded-3xl overflow-hidden group shadow-sm hover:shadow-lg transition-all duration-300 transform"
               >
                 {ad.imageUrl ? (
-                  <img 
+                  <ImageWithSkeleton 
                     src={ad.imageUrl} 
                     alt={ad.title || "Advertisement"} 
-                    className="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
-                    referrerPolicy="no-referrer"
+                    className="w-full h-full" 
+                    imageClassName="w-full h-full object-cover group-hover:scale-[1.03] transition-transform duration-700 ease-out" 
                   />
                 ) : null}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10 pointer-events-none" />
                 
                 <div className="absolute inset-x-0 bottom-0 p-6 sm:p-8 z-20 flex flex-col justify-end text-white">
                   {ad.title && (
@@ -296,38 +335,46 @@ export default function Home() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[...lookbook]
-              .sort((a, b) => (a.serial || 0) - (b.serial || 0))
-              .map((lb, idx) => (
-                <Link 
-                  key={lb.id} 
-                  to={lb.link || "/shop"} 
-                  className={`relative rounded-3xl overflow-hidden group ${lb.className || ''}`}
-                >
-                  {lb.image ? (
-                    <img 
-                      src={lb.image} 
-                      alt={lb.title || "Lookbook"} 
-                      loading="lazy" 
-                      decoding="async" 
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
-                    />
-                  ) : null}
-                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors duration-500" />
-                  
-                  {/* Title overlay */}
-                  <div className="absolute bottom-4 left-4 z-10 text-white translate-y-2 group-hover:translate-y-0 transition-all duration-500">
-                    {lb.title && (
-                      <p className="text-sm font-black uppercase tracking-wide drop-shadow-md">{lb.title}</p>
-                    )}
-                    <span className="text-[9px] font-bold tracking-widest text-gray-300 drop-shadow-sm uppercase">Shop the Style</span>
-                  </div>
+            {!isDbLoaded || lookbook.length === 0 ? (
+              Array(4).fill(0).map((_, idx) => (
+                <div key={idx} className="h-56 sm:h-64 rounded-3xl overflow-hidden bg-gray-200 dark:bg-gray-800 animate-pulse p-4 flex flex-col justify-end">
+                  <div className="h-4 w-24 bg-gray-300 dark:bg-gray-700 rounded mb-2" />
+                  <div className="h-3 w-16 bg-gray-300 dark:bg-gray-700 rounded" />
+                </div>
+              ))
+            ) : (
+              [...lookbook]
+                .sort((a, b) => (a.serial || 0) - (b.serial || 0))
+                .map((lb, idx) => (
+                  <Link 
+                    key={lb.id} 
+                    to={lb.link || "/shop"} 
+                    className={`relative rounded-3xl overflow-hidden group min-h-[220px] ${lb.className || ''}`}
+                  >
+                    {lb.image ? (
+                      <ImageWithSkeleton 
+                        src={lb.image} 
+                        alt={lb.title || "Lookbook"} 
+                        className="w-full h-full min-h-[220px]" 
+                        imageClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                      />
+                    ) : null}
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors duration-500 pointer-events-none" />
+                    
+                    {/* Title overlay */}
+                    <div className="absolute bottom-4 left-4 z-10 text-white translate-y-2 group-hover:translate-y-0 transition-all duration-500 pointer-events-none">
+                      {lb.title && (
+                        <p className="text-sm font-black uppercase tracking-wide drop-shadow-md">{lb.title}</p>
+                      )}
+                      <span className="text-[9px] font-bold tracking-widest text-gray-300 drop-shadow-sm uppercase">Shop the Style</span>
+                    </div>
 
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500">
-                    <span className="bg-white text-black px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest shadow-xl">Shop The Look</span>
-                  </div>
-                </Link>
-              ))}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20 pointer-events-none">
+                      <span className="bg-white text-black px-6 py-3 rounded-xl text-xs font-bold uppercase tracking-widest shadow-xl">Shop The Look</span>
+                    </div>
+                  </Link>
+                ))
+            )}
           </div>
         </div>
       </motion.section>
@@ -371,9 +418,9 @@ export default function Home() {
                transition={{ delay: 0.3 }}
                className="py-4 md:py-0 px-6 flex flex-col items-center"
             >
-              <RotateCcw className="h-10 w-10 text-gray-900 mb-4" />
-              <h3 className="text-xl font-bold mb-2">Cash On Delivery</h3>
-              <p className="text-gray-500 text-sm">Hassle-free Cash On Delivery</p>
+              <Banknote className="h-10 w-10 text-gray-900 mb-4" />
+              <h3 className="text-xl font-bold mb-2">Cash on Delivery</h3>
+              <p className="text-gray-500 text-sm">Hassle-free Cash on Delivery</p>
             </motion.div>
           </div>
         </div>

@@ -33,7 +33,7 @@ export default function FloatingButtons() {
     <div className="fixed bottom-6 right-6 flex flex-col gap-4 z-50">
       <motion.a
         id="whatsapp-button"
-        href="https://wa.me/01978213798"
+        href="https://wa.me/0151515668345"
         target="_blank"
         rel="noopener noreferrer"
         className="bg-[#25D366] text-white p-3 rounded-full shadow-lg hover:bg-[#20ba59] transition-colors relative"

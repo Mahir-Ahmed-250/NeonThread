@@ -55,6 +55,18 @@ function RootLayout() {
   );
 }
 
+const PageTransition: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <motion.div
+    initial={{ opacity: 0, y: 6 }}
+    animate={{ opacity: 1, y: 0 }}
+    exit={{ opacity: 0, y: -6 }}
+    transition={{ duration: 0.18, ease: "easeOut" }}
+    className="flex-1 flex flex-col min-h-0"
+  >
+    {children}
+  </motion.div>
+);
+
 function AnimatedRoutes() {
   const location = useLocation();
   const { isMaintenanceMode } = useShop();
@@ -73,38 +85,23 @@ function AnimatedRoutes() {
   return (
     <Suspense fallback={<div className="flex-1 bg-white" />}>
       <AnimatePresence mode="wait">
-        <motion.div
-          key={location.pathname}
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="flex-1 flex flex-col min-h-0"
-        >
-          <Routes location={location}>
-            <Route path="/" element={<RootLayout />}>
-              <Route index element={<Home />} />
-              <Route path="shop" element={<Shop />} />
-              <Route path="product/:id" element={<ProductDetails />} />
-              <Route path="checkout" element={<Checkout />} />
-              <Route path="contact" element={<Contact />} />
-              <Route path="track-order" element={<TrackOrder />} />
-              <Route path="faq" element={<FAQ />} />
-              <Route path="policies" element={<Policies />} />
-              <Route path="shipping-policy" element={<ShippingPolicy />} />
-              <Route path="privacy-policy" element={<PrivacyPolicy />} />
-              <Route path="wishlist" element={<Wishlist />} />
-              <Route path="*" element={<NotFound />} />
-            </Route>
-            <Route path="/admin" element={
-              <div className="flex-1 flex flex-col min-h-screen bg-white">
-                <header className="sticky top-0 z-[100]"><AnnouncementBar /><Navbar /></header>
-                <Breadcrumbs />
-                <div className="flex-1 flex min-h-0"><AdminDashboard /></div>
-              </div>
-            } />
-          </Routes>
-        </motion.div>
+        <Routes location={location}>
+          <Route path="/" element={<RootLayout />}>
+            <Route index element={<PageTransition><Home /></PageTransition>} />
+            <Route path="shop" element={<PageTransition><Shop /></PageTransition>} />
+            <Route path="product/:id" element={<PageTransition><ProductDetails /></PageTransition>} />
+            <Route path="checkout" element={<PageTransition><Checkout /></PageTransition>} />
+            <Route path="contact" element={<PageTransition><Contact /></PageTransition>} />
+            <Route path="track-order" element={<PageTransition><TrackOrder /></PageTransition>} />
+            <Route path="faq" element={<PageTransition><FAQ /></PageTransition>} />
+            <Route path="policies" element={<PageTransition><Policies /></PageTransition>} />
+            <Route path="shipping-policy" element={<PageTransition><ShippingPolicy /></PageTransition>} />
+            <Route path="privacy-policy" element={<PageTransition><PrivacyPolicy /></PageTransition>} />
+            <Route path="wishlist" element={<PageTransition><Wishlist /></PageTransition>} />
+            <Route path="*" element={<PageTransition><NotFound /></PageTransition>} />
+          </Route>
+          <Route path="/admin" element={<PageTransition><div className="flex flex-col min-h-screen bg-white transition-colors duration-300"><header className="sticky top-0 z-[100]"><AnnouncementBar /><Navbar /></header><Breadcrumbs /><div className="flex-1 flex min-h-0"><AdminDashboard /></div></div></PageTransition>} />
+        </Routes>
       </AnimatePresence>
     </Suspense>
   );
@@ -117,6 +114,7 @@ export default function App() {
         <ShopProvider>
           <LoadingBar />
           <ScrollToTop />
+          <PageLoader />
           <PopupAdOverlay />
           <AnimatedRoutes />
         </ShopProvider>

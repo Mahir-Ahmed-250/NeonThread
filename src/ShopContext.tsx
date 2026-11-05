@@ -4,6 +4,7 @@ import { Product, Order, Category, Coupon, CartItem, CustomerInfo, Slide, Catego
 import { generateId } from './lib/utils';
 
 interface ShopContextType {
+  isDbLoaded: boolean;
   products: Product[];
   orders: Order[];
   coupons: Coupon[];
@@ -55,8 +56,8 @@ interface ShopContextType {
   deleteCategory: (id: string) => void;
   addLookbookImage: (img: Omit<LookbookImage, 'id'>) => void;
   updateLookbookImage: (img: LookbookImage) => void;
+  updateLookbookList: (newList: LookbookImage[]) => void;
   deleteLookbookImage: (id: string) => void;
-  moveLookbookImage: (id: string, direction: 'up' | 'down') => void;
   addProduct: (product: Omit<Product, 'id'>) => void;
   updateProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
@@ -189,56 +190,6 @@ const defaultHomeAds: HomeAd[] = [
   }
 ];
 
-const DatabaseLoader = ({ onComplete }: { onComplete: () => void }) => {
-  const [progress, setProgress] = useState(0);
-
-  useEffect(() => {
-    // Prevent scrolling while loading
-    document.body.style.overflow = 'hidden';
-    
-    const start = Date.now();
-    const duration = 800; // Minimum duration for visual smoothness
-
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - start;
-      const p = Math.min(100, Math.floor((elapsed / duration) * 100));
-      setProgress(p);
-
-      if (elapsed >= duration) {
-        clearInterval(interval);
-        setTimeout(() => {
-          document.body.style.overflow = '';
-          onComplete();
-        }, 200); // Small delay for 100% visibility
-      }
-    }, 30);
-    
-    return () => {
-      clearInterval(interval);
-      document.body.style.overflow = '';
-    };
-  }, [onComplete]);
-
-  return (
-    <div className="fixed inset-0 bg-white dark:bg-gray-950 flex flex-col items-center justify-center p-6 z-[9999]">
-      <div className="w-full max-w-sm flex flex-col items-center gap-4">
-        <div className="flex flex-col items-center gap-1">
-          <p className="text-[10px] uppercase font-black tracking-widest text-gray-500"></p>
-          <p className="text-2xl font-black text-black dark:text-white">{progress}%</p>
-        </div>
-        <div className="w-full h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden relative">
-          <motion.div
-            initial={{ width: "0%" }}
-            animate={{ width: `${progress}%` }}
-            transition={{ ease: "linear", duration: 0.1 }}
-            className="h-full bg-black dark:bg-white shadow-[0_0_10px_rgba(0,0,0,0.1)] dark:shadow-[0_0_10px_rgba(255,255,255,0.1)]"
-          />
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const safeParse = (saved: string | null, fallback: any) => {
   if (!saved || saved === 'undefined' || saved === 'null') return fallback;
   try {
@@ -247,7 +198,7 @@ const safeParse = (saved: string | null, fallback: any) => {
     if (Array.isArray(fallback) && !Array.isArray(parsed)) return fallback;
     return parsed;
   } catch (e) {
-    console.error('Failed to parse from local storage:', e);
+    console.warn('Failed to parse from local storage:', e);
     return fallback;
   }
 };
@@ -279,11 +230,11 @@ const COLLECTION_KEYS = [
 
 export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [products, setProducts] = useState<Product[]>(() => {
-    return safeParse(localStorage.getItem('ts_products'), defaultProducts);
+    return safeParse(localStorage.getItem('ts_products'), []);
   });
 
   const [categories, setCategories] = useState<Category[]>(() => {
-    return safeParse(localStorage.getItem('ts_categories'), defaultCategories);
+    return safeParse(localStorage.getItem('ts_categories'), []);
   });
 
   const [contactInfo, setContactInfo] = useState<ContactInfo>(() => {
@@ -298,11 +249,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [faqs, setFaqs] = useState<FAQItem[]>(() => {
-    return safeParse(localStorage.getItem('ts_faqs'), defaultFAQs);
+    return safeParse(localStorage.getItem('ts_faqs'), []);
   });
 
   const [policies, setPolicies] = useState<PolicyItem[]>(() => {
-    return safeParse(localStorage.getItem('ts_policies'), defaultPolicies);
+    return safeParse(localStorage.getItem('ts_policies'), []);
   });
 
   const [orders, setOrders] = useState<Order[]>(() => {
@@ -342,7 +293,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   const [homeAds, setHomeAds] = useState<HomeAd[]>(() => {
-    return safeParse(localStorage.getItem('ts_home_ads'), defaultHomeAds);
+    return safeParse(localStorage.getItem('ts_home_ads'), []);
   });
 
   const [otps, setOtps] = useState<OTPRecord[]>(() => {
@@ -421,40 +372,67 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isDbLoaded, setIsDbLoaded] = useState(false);
-  const [showApp, setShowApp] = useState(false);
 
   const serverSave = async (key: string, data: any) => {
     if (!authToken) return;
     try {
-      const res = await fetch('/api/db/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key, data, token: authToken })
-      });
-      
-      if (!res.ok) {
-        if (res.status === 401) {
-          // Clear invalid/expired admin token and log out
-          setCurrentAdmin(null);
-          setAuthToken(null);
-          setIsAdminAuth(false);
+      if (Array.isArray(data) && data.length > 0) {
+        // Break arrays into chunks of 5 items to avoid HTTP 413 Payload Too Large
+        const chunkSize = 5;
+        for (let i = 0; i < data.length; i += chunkSize) {
+          const chunk = data.slice(i, i + chunkSize);
+          const res = await fetch('/api/db/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, data: chunk, token: authToken })
+          });
+          
+          if (!res.ok) {
+            if (res.status === 401) {
+              setCurrentAdmin(null);
+              setAuthToken(null);
+              setIsAdminAuth(false);
+            }
+            let errorMsg = `Server error (${res.status})`;
+            try {
+              const errorData = await res.json();
+              errorMsg += `: ${errorData.error || res.statusText}`;
+            } catch (e) {
+              errorMsg += `: ${res.statusText}`;
+            }
+            throw new Error(errorMsg);
+          }
         }
-        let errorMsg = `Server error (${res.status})`;
-        try {
-          const errorData = await res.json();
-          errorMsg += `: ${errorData.error || res.statusText}`;
-        } catch (e) {
-          errorMsg += `: ${res.statusText}`;
-        }
-        throw new Error(errorMsg);
-      }
-      
-    } catch (err: any) {
-      if (err.message.includes('Failed to fetch') || err.message.includes('network')) {
-        // Quietly fail on network errors as the server might be restarting or slow
-        console.warn(`Server sync skipped for ${key} (network issue).`);
       } else {
-        console.error(`Failed to save ${key} to server database:`, err);
+        const res = await fetch('/api/db/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, data, token: authToken })
+        });
+        
+        if (!res.ok) {
+          if (res.status === 401) {
+            setCurrentAdmin(null);
+            setAuthToken(null);
+            setIsAdminAuth(false);
+          }
+          let errorMsg = `Server error (${res.status})`;
+          try {
+            const errorData = await res.json();
+            errorMsg += `: ${errorData.error || res.statusText}`;
+          } catch (e) {
+            errorMsg += `: ${res.statusText}`;
+          }
+          throw new Error(errorMsg);
+        }
+      }
+    } catch (err: any) {
+      if (err.message && (err.message.includes('Failed to fetch') || err.message.includes('network'))) {
+        console.warn(`Server sync skipped for ${key} (network issue).`);
+      } else if (err.message && err.message.includes('413')) {
+        console.warn(`Server sync warning: Payload for ${key} was too large for server batch (413).`);
+      } else {
+        console.warn(`Server sync notice for ${key}:`, err.message || err);
       }
     }
   };
@@ -467,21 +445,31 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         body: JSON.stringify({ key, data: item })
       });
     } catch (err) {
-      console.error(`Failed to publicly add ${key}:`, err);
+      console.warn(`Failed to publicly add ${key}:`, err);
     }
   };
 
   useEffect(() => {
+    // Safety fallback: Ensure loader completes in maximum 1.2 seconds even if server response is delayed
+    const safetyTimer = setTimeout(() => {
+      setIsDbLoaded(true);
+    }, 1200);
+
     const fetchDb = async () => {
+      const controller = new AbortController();
+      const abortTimer = setTimeout(() => controller.abort(), 8000);
+
       try {
         let currentToken = authToken;
         let endpoint = currentToken ? '/api/admin/db' : '/api/db';
         let options: RequestInit = currentToken ? {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: currentToken })
+          body: JSON.stringify({ token: currentToken }),
+          signal: controller.signal
         } : {
-          method: 'GET'
+          method: 'GET',
+          signal: controller.signal
         };
 
         let res = await fetch(endpoint, options);
@@ -496,16 +484,18 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           
           // Retry with public db endpoint
           endpoint = '/api/db';
-          options = { method: 'GET' };
+          options = { method: 'GET', signal: controller.signal };
           res = await fetch(endpoint, options);
         }
+
+        clearTimeout(abortTimer);
 
         if (!res.ok) {
           throw new Error(`Server responded with ${res.status}`);
         }
         const dbData = await res.json();
         
-        // Handle both full DB object (admin/public) and products array (legacy public fallback)
+        // Handle both full DB object and products array fallback
         let normalizedDbData: any = {};
         if (Array.isArray(dbData)) {
           normalizedDbData = { products: dbData };
@@ -544,8 +534,16 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (normalizedDbData.announcements) setAnnouncements(normalizedDbData.announcements);
             if (normalizedDbData.socialLinks) setSocialLinks(normalizedDbData.socialLinks);
             if (normalizedDbData.comparison) setComparisonItems(normalizedDbData.comparison);
-            if (normalizedDbData.contactInfo) setContactInfo(normalizedDbData.contactInfo);
+            if (normalizedDbData.reviews) setReviews(normalizedDbData.reviews);
             if (normalizedDbData.maintenance_mode !== undefined) setIsMaintenanceMode(normalizedDbData.maintenance_mode);
+            try {
+              if (normalizedDbData.products) localStorage.setItem('ts_products', JSON.stringify(normalizedDbData.products));
+              if (normalizedDbData.categories) localStorage.setItem('ts_categories', JSON.stringify(normalizedDbData.categories));
+              if (normalizedDbData.slides) localStorage.setItem('ts_slides', JSON.stringify(normalizedDbData.slides));
+              if (normalizedDbData.categoryBanners) localStorage.setItem('ts_category_banners', JSON.stringify(normalizedDbData.categoryBanners));
+              if (normalizedDbData.lookbook) localStorage.setItem('ts_lookbook', JSON.stringify(normalizedDbData.lookbook));
+              if (normalizedDbData.homeAds) localStorage.setItem('ts_home_ads', JSON.stringify(normalizedDbData.homeAds));
+            } catch (_) {}
           } else if (products.length > 0 || (currentToken && admins.length > 1)) {
              // Server is empty but client has data -> Initialize server
              console.log("Server is empty but client has local data. Syncing to server...");
@@ -581,12 +579,15 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           console.log("Database is empty, waiting for initial data entry...");
         }
       } catch (err) {
-        console.error("Failed to load DB from server:", err);
+        console.warn("Could not reach DB endpoint from client, using cached/local state:", err);
       } finally {
+        clearTimeout(safetyTimer);
         setIsDbLoaded(true);
       }
     };
     fetchDb();
+
+    return () => clearTimeout(safetyTimer);
   }, [authToken]);
 
   // Custom hook to prevent syncing on the first load of isDbLoaded
@@ -1325,32 +1326,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateLookbookImage = (img: LookbookImage) => {
     setLookbook(prev => prev.map(l => l.id === img.id ? img : l));
   };
+  const updateLookbookList = (newList: LookbookImage[]) => {
+    setLookbook(newList);
+  };
   const deleteLookbookImage = (id: string) => {
     setLookbook(prev => prev.map(l => l.id === id ? { ...l, deleted: true } : l));
-  };
-  
-  const moveLookbookImage = (id: string, direction: 'up' | 'down') => {
-    setLookbook(prev => {
-      const activeItems = prev.filter(l => !l.deleted).sort((a, b) => (a.serial || 0) - (b.serial || 0));
-      const currentIndex = activeItems.findIndex(l => l.id === id);
-      if (currentIndex === -1) return prev;
-      
-      const targetIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-      if (targetIndex < 0 || targetIndex >= activeItems.length) return prev;
-      
-      const currentItem = activeItems[currentIndex];
-      const targetItem = activeItems[targetIndex];
-      
-      // Swap serials
-      const currentSerial = currentItem.serial;
-      const targetSerial = targetItem.serial;
-      
-      return prev.map(l => {
-        if (l.id === currentItem.id) return { ...l, serial: targetSerial };
-        if (l.id === targetItem.id) return { ...l, serial: currentSerial };
-        return l;
-      });
-    });
   };
 
   const addSubscriber = (email: string) => {
@@ -1441,22 +1421,32 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setOtps(prev => prev.map(o => o.id === id ? { ...o, deleted: true } : o));
   };
 
+  useEffect(() => {
+    // Keep-alive ping every 3 minutes to keep Render web service active and prevent cold start white screen
+    const keepAliveTimer = setInterval(() => {
+      fetch('/api/ping').catch(() => {});
+    }, 3 * 60 * 1000);
+
+    return () => clearInterval(keepAliveTimer);
+  }, []);
+
   return (
     <ShopContext.Provider value={{
-      products: products.filter(p => !p.deleted), 
-      orders: orders.filter(o => !o.deleted), 
-      coupons: coupons.filter(c => !c.deleted), 
-      cart, 
-      slides: slides.filter(s => !s.deleted), 
-      categoryBanners: categoryBanners.filter(b => !b.deleted), 
-      lookbook: lookbook.filter(l => !l.deleted), 
-      subscribers: subscribers.filter(s => !s.deleted), 
-      contactMessages: contactMessages.filter(m => !m.deleted), 
-      popupAds: popupAds.filter(a => !a.deleted), 
-      homeAds: homeAds.filter(a => !a.deleted), 
-      faqs: faqs.filter(f => !f.deleted), 
-      policies: policies.filter(p => !p.deleted), 
-      categories: categories.filter(c => !c.deleted),
+      isDbLoaded,
+      products: (products || []).filter(p => !p.deleted),
+      categories: (categories || []).filter(c => !c.deleted), 
+      orders: (orders || []).filter(o => !o.deleted), 
+      coupons: (coupons || []).filter(c => !c.deleted), 
+      cart: cart || [], 
+      slides: (slides || []).filter(s => !s.deleted), 
+      categoryBanners: (categoryBanners || []).filter(b => !b.deleted), 
+      lookbook: (lookbook || []).filter(l => !l.deleted), 
+      subscribers: (subscribers || []).filter(s => !s.deleted), 
+      contactMessages: (contactMessages || []).filter(m => !m.deleted), 
+      popupAds: (popupAds || []).filter(a => !a.deleted), 
+      homeAds: (homeAds || []).filter(a => !a.deleted), 
+      faqs: (faqs || []).filter(f => !f.deleted), 
+      policies: (policies || []).filter(p => !p.deleted),
       contactInfo,
       isAdminAuth,
       authToken,
@@ -1471,7 +1461,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       loginAdmin, logoutAdmin, updateProfile, addAdmin, updateAdmin, deleteAdmin, updateContactInfo, addProduct, updateProduct, deleteProduct,
       addSlide, updateSlide, deleteSlide, addCategoryBanner, updateCategoryBanner, deleteCategoryBanner, 
       addCategory, updateCategory, deleteCategory,
-      addLookbookImage, updateLookbookImage, deleteLookbookImage, moveLookbookImage,
+      addLookbookImage, updateLookbookImage, updateLookbookList, deleteLookbookImage,
       addCoupon, updateCoupon, deleteCoupon,
       updateOrderStatus, updateOrderNotes, updateOrder, deleteOrder,
       addSubscriber, deleteSubscriber, addContactMessage, deleteContactMessage, addPopupAd, deletePopupAd, updatePopupAd,
@@ -1485,8 +1475,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       announcements: announcements.filter(a => !a.deleted), addAnnouncement, updateAnnouncement, deleteAnnouncement,
       socialLinks, updateSocialLinks
     }}>
-      {!showApp && <DatabaseLoader onComplete={() => setShowApp(true)} />}
-      {showApp && children}
+      <div className="contents">
+        {children}
+      </div>
     </ShopContext.Provider>
   );
 };

@@ -96,7 +96,7 @@ export default function TrackOrder() {
       .then(data => {
         console.log('[EMAIL] OTP API response:', data);
       }).catch(err => {
-        console.error('[EMAIL] OTP API error:', err);
+        console.warn('[EMAIL] OTP API error:', err);
       });
     
     const maskEmail = (emailStr: string) => {

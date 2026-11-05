@@ -7,18 +7,18 @@ import { SlidersHorizontal, X } from 'lucide-react';
 import { motion } from 'motion/react';
 
 export default function Shop() {
-  const { products, categories } = useShop();
+  const { products, categories, isDbLoaded } = useShop();
   const shopProducts = useMemo(() => products, [products]);
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
   const activeCategory = searchParams.get('category') || '';
-  const [loading, setLoading] = useState(products.length === 0);
+  const [loading, setLoading] = useState(!isDbLoaded);
 
   useEffect(() => {
-    if (products.length > 0) {
+    if (isDbLoaded) {
       setLoading(false);
     }
-  }, [products.length]);
+  }, [isDbLoaded]);
 
   const [minPrice, setMinPrice] = useState<number | ''>('');
   const [maxPrice, setMaxPrice] = useState<number | ''>('');
@@ -28,7 +28,7 @@ export default function Shop() {
 
   // Use managed categories from context
   const categoriesList = useMemo(() => {
-    return categories.map(c => c.name);
+    return (categories || []).map(c => c.name);
   }, [categories]);
 
   const filteredProducts = useMemo(() => {
@@ -269,33 +269,45 @@ export default function Shop() {
 
             {/* Quick Category Action Pills */}
             <div className="flex flex-wrap gap-1.5 scrollbar-thin overflow-x-auto py-1">
-              <button 
-                onClick={() => selectCategory('')}
-                className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
-                  !activeCategory 
-                    ? 'bg-black text-white border-black shadow-md' 
-                    : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm'
-                }`}
-              >
-                All
-              </button>
-              {categoriesList.map(cat => (
-                <button 
-                  key={cat}
-                  onClick={() => selectCategory(cat)}
-                  className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
-                    activeCategory.toLowerCase() === cat.toLowerCase()
-                      ? 'bg-black text-white border-black shadow-md' 
-                      : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+              {!isDbLoaded && categoriesList.length === 0 ? (
+                Array(5).fill(0).map((_, idx) => (
+                  <div key={idx} className="h-8 w-20 bg-gray-200 rounded-full animate-pulse" />
+                ))
+              ) : (
+                <>
+                  <button 
+                    onClick={() => selectCategory('')}
+                    className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
+                      !activeCategory 
+                        ? 'bg-black text-white border-black shadow-md' 
+                        : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm'
+                    }`}
+                  >
+                    All
+                  </button>
+                  {categoriesList.map(cat => (
+                    <button 
+                      key={cat}
+                      onClick={() => selectCategory(cat)}
+                      className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
+                        activeCategory.toLowerCase() === cat.toLowerCase()
+                          ? 'bg-black text-white border-black shadow-md' 
+                          : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </>
+              )}
             </div>
           </div>
 
-          {filteredProducts.length === 0 ? (
+          {!isDbLoaded ? (
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+              {Array(8).fill(0).map((_, i) => <ProductCardSkeleton key={i} />)}
+            </div>
+          ) : filteredProducts.length === 0 ? (
             <div className="text-center py-20 bg-white rounded-2xl border border-gray-100">
               <p className="text-gray-500 text-sm font-bold uppercase tracking-widest">No products found matching your criteria.</p>
               { (minPrice !== '' || maxPrice !== '' || onlyHotSale || sortBy !== 'none') && (
@@ -304,13 +316,9 @@ export default function Shop() {
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
-              {loading ? (
-                Array(8).fill(0).map((_, i) => <ProductCardSkeleton key={i} />)
-              ) : (
-                filteredProducts.map(product => (
-                  <ProductCard key={product.id} product={product} />
-                ))
-              )}
+              {filteredProducts.map(product => (
+                <ProductCard key={product.id} product={product} />
+              ))}
             </div>
           )}
         </motion.div>
