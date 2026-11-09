@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Ticket, Plus, Minus, Trash2, Loader2, Download } from 'lucide-react';
+import { Ticket, Plus, Minus, Trash2, Loader2, Download, Printer } from 'lucide-react';
 import { useShop } from '../ShopContext';
 import { useToast } from '../components/Toast';
 import { motion } from 'motion/react';
 import SuccessAnimation from '../components/SuccessAnimation';
 import { Order } from '../types';
-import { generateInvoicePDF } from '../lib/invoiceUtils';
+import { generateInvoicePDF, printOrderVoucher, formatOrderId } from '../lib/invoiceUtils';
+import { apiUrl } from '../lib/api';
 
 const BANGLADESH_DISTRICTS = [
   { en: 'Bagerhat', bn: 'বাগেরহাট' },
@@ -108,30 +109,167 @@ export default function Checkout() {
 
   if (orderComplete.status && orderComplete.order) {
     const order = orderComplete.order;
+    const formattedId = formatOrderId(order.id);
     return (
-      <div className="flex-1 w-full max-w-3xl mx-auto px-4 py-20 text-center flex flex-col items-center">
+      <div className="flex-1 w-full max-w-3xl mx-auto px-4 py-12 flex flex-col items-center">
         <SuccessAnimation />
-        <h1 className="text-4xl font-black text-gray-900 mb-4 tracking-tight">Order Placed Successfully!</h1>
-        <p className="text-gray-500 mb-4 text-lg">
-          Thank you for your purchase. We will contact you soon to confirm the delivery.
+        <h1 className="text-3xl md:text-4xl font-black text-gray-900 dark:text-white mb-2 tracking-tight text-center">
+          Order Placed Successfully!
+        </h1>
+        <p className="text-gray-500 dark:text-gray-400 mb-8 text-sm md:text-base text-center">
+          Thank you for your purchase. Below is your order voucher preview.
         </p>
-        <div className="bg-gray-100 px-6 py-4 rounded-xl mb-8 flex flex-col items-center">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-1">Your Order Number</span>
-          <span className="text-2xl font-mono font-bold text-gray-900">{order.id}</span>
+
+        {/* Order Voucher Preview Card */}
+        <div className="w-full bg-white text-gray-900 border-2 border-gray-900 rounded-3xl shadow-xl p-6 md:p-8 mb-8 text-left">
+          {/* Voucher Header */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 border-b-2 border-gray-900 pb-5 mb-6">
+            <div>
+              <h2 className="text-2xl md:text-3xl font-black uppercase tracking-tight text-black">
+                TRENDY CART BD
+              </h2>
+              <span className="inline-block mt-1.5 text-[10px] font-black uppercase tracking-widest bg-gray-100 text-gray-700 px-3 py-1 rounded-md border border-gray-200">
+                Order Voucher / ক্যাশ মেমো
+              </span>
+            </div>
+            <div className="sm:text-right space-y-1">
+              <div className="inline-block sm:block bg-black text-white px-3 py-1 rounded-lg font-mono text-xs md:text-sm font-black">
+                Order ID: #{formattedId}
+              </div>
+              <p className="text-xs font-bold text-gray-500">
+                Date: {new Date(order.date).toLocaleString()}
+              </p>
+              <p className="text-[11px] font-black uppercase tracking-wider text-emerald-600">
+                Payment: Cash on Delivery
+              </p>
+            </div>
+          </div>
+
+          {/* Customer & Shipping Info */}
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4 md:p-5 mb-6">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-gray-400 border-b border-gray-200 pb-2 mb-3">
+              Customer & Delivery Information (ডেলিভারি ঠিকানা)
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs md:text-sm">
+              <p><span className="font-bold text-gray-500">Name:</span> <span className="font-black text-gray-900">{order.customer.name}</span></p>
+              <p><span className="font-bold text-gray-500">Phone:</span> <span className="font-mono font-bold text-gray-900">{order.customer.phone}</span></p>
+              <p><span className="font-bold text-gray-500">Email:</span> <span className="font-medium text-gray-800 break-all">{order.customer.email || 'N/A'}</span></p>
+              <p><span className="font-bold text-gray-500">District:</span> <span className="font-bold text-gray-900">{order.customer.district || 'N/A'}</span></p>
+              <p className="sm:col-span-2 leading-relaxed break-words">
+                <span className="font-bold text-gray-500">Address:</span>{' '}
+                <span className="font-medium text-gray-900">{order.customer.address}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Ordered Products Table with Images */}
+          <div className="overflow-x-auto mb-6 border border-gray-200 rounded-2xl">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-gray-900 text-white text-[10px] font-black uppercase tracking-widest">
+                  <th className="py-3 px-4">Product</th>
+                  <th className="py-3 px-3 text-center">Qty</th>
+                  <th className="py-3 px-3 text-right">Price</th>
+                  <th className="py-3 px-4 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 text-xs md:text-sm">
+                {order.items.map((item, idx) => (
+                  <tr key={(item as any).cartItemId || `${item.id}-${idx}`} className="bg-white">
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-3">
+                        {item.image ? (
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-12 h-12 md:w-14 md:h-14 rounded-xl object-cover border border-gray-200 bg-gray-50 shrink-0"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <div className="w-12 h-12 rounded-xl bg-gray-100 border border-gray-200 shrink-0" />
+                        )}
+                        <div className="min-w-0">
+                          <p className="font-black text-gray-900 uppercase text-xs md:text-sm leading-snug">
+                            {item.name}
+                          </p>
+                          <p className="text-[11px] font-bold text-gray-500 mt-0.5">
+                            Size: <span className="text-gray-800">{item.selectedSize || 'N/A'}</span>
+                            {item.code ? ` • Code: ${item.code}` : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-3 text-center font-mono font-bold text-gray-700">
+                      x{item.quantity}
+                    </td>
+                    <td className="py-3 px-3 text-right font-medium text-gray-600 whitespace-nowrap">
+                      ৳{item.price.toFixed(2)}
+                    </td>
+                    <td className="py-3 px-4 text-right font-black text-gray-900 whitespace-nowrap">
+                      ৳{(item.price * item.quantity).toFixed(2)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Totals Section */}
+          <div className="flex justify-end mb-6">
+            <div className="w-full sm:w-72 bg-gray-50 border border-gray-200 rounded-2xl p-4 space-y-2 text-xs md:text-sm">
+              <div className="flex justify-between text-gray-600">
+                <span className="font-medium">Subtotal:</span>
+                <span className="font-bold text-gray-900">৳{order.subtotal.toFixed(2)}</span>
+              </div>
+              {order.discount > 0 && (
+                <div className="flex justify-between text-emerald-600">
+                  <span className="font-bold">Discount:</span>
+                  <span className="font-bold">- ৳{order.discount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-gray-600">
+                <span className="font-medium">Delivery Charge:</span>
+                <span className="font-bold text-gray-900">৳{order.shippingCharge.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between border-t-2 border-gray-900 pt-2.5 mt-2 text-sm md:text-base font-black text-black">
+                <span>Total Payable:</span>
+                <span>৳{order.total.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* System Generated Voucher Footer */}
+          <div className="border-t border-dashed border-gray-300 pt-4 text-center space-y-1">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gray-100 border border-gray-200 text-[11px] font-black uppercase tracking-wider text-gray-800">
+              সিস্টেম জেনারেটেড ভাউচার • System Generated Voucher
+            </div>
+            <p className="text-[11px] text-gray-400 font-medium pt-1">
+              Thank you for shopping with Trendy Cart BD! No signature is required.
+            </p>
+          </div>
         </div>
         
-        <div className="flex flex-wrap justify-center gap-4 mb-8">
+        {/* Action Buttons Below Voucher Preview */}
+        <div className="flex flex-wrap justify-center gap-3 md:gap-4 mb-8 w-full">
           <button
             onClick={() => generateInvoicePDF(order)}
-            className="bg-black text-white px-8 py-3 rounded-full font-bold hover:bg-gray-800 transition-all active:scale-95 flex items-center gap-2 shadow-lg shadow-black/10"
+            className="bg-black text-white px-7 py-3.5 rounded-full font-bold text-sm hover:bg-gray-800 transition-all active:scale-95 flex items-center gap-2 shadow-lg shadow-black/10 cursor-pointer"
           >
             <Download size={18} />
-            Download Invoice
+            Download Voucher (ডাউনলোড)
+          </button>
+
+          <button
+            onClick={() => printOrderVoucher(order)}
+            className="bg-blue-600 text-white px-7 py-3.5 rounded-full font-bold text-sm hover:bg-blue-700 transition-all active:scale-95 flex items-center gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
+          >
+            <Printer size={18} />
+            Print Voucher (প্রিন্ট)
           </button>
           
           <button
             onClick={() => navigate('/track-order')}
-            className="bg-white text-black border-2 border-black px-8 py-3 rounded-full font-bold hover:bg-gray-50 transition-all active:scale-95"
+            className="bg-white text-black border-2 border-black px-7 py-3.5 rounded-full font-bold text-sm hover:bg-gray-50 transition-all active:scale-95 cursor-pointer"
           >
             Track Order
           </button>
@@ -139,7 +277,7 @@ export default function Checkout() {
 
         <button
           onClick={() => navigate('/')}
-          className="text-gray-500 text-sm font-bold hover:text-black transition-colors"
+          className="text-gray-500 text-sm font-bold hover:text-black dark:hover:text-white transition-colors"
         >
           Back to Home
         </button>
@@ -206,7 +344,7 @@ export default function Checkout() {
       setOrderComplete({status: true, order: newOrderObj});
 
       // Send invoice in the background
-      fetch('/api/send-invoice', {
+      fetch(apiUrl('/api/send-invoice'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: formData.email, order: newOrderObj })

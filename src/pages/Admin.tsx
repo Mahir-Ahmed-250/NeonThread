@@ -3,10 +3,12 @@ import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, PieChart, Pie, Legend } from 'recharts';
 import { useShop } from '../ShopContext';
 import { Package, ShoppingBag, Ticket, Trash2, Plus, Minus, Edit, LogOut, Layout, Image, Camera, X, Users, Mail, MonitorPlay, Printer, HelpCircle, ShieldCheck, ShieldAlert, Ruler, ShoppingBasket, Home, TrendingUp, DollarSign, PackageCheck, UserCircle, Settings, Megaphone, MessageSquare, Search, Calendar, MapPin, Truck, CheckCircle, XCircle, Download, Clock, Bell, Key, History, Loader2, Star, Tag, Layers, Check, Phone, Facebook, Instagram, Youtube, Twitter, Music2, Share2, UploadCloud, Eye, EyeOff, Grid, ArrowLeft, ArrowRight, Save, RotateCcw } from 'lucide-react';
-import { Product, ProductImageVariant, Category, PopupAd, FAQItem, PolicyItem, HomeAd, AdminUser, LookbookImage, CategoryBanner, Coupon, Order, AdminPermissions, Review, Announcement, SocialLink } from '../types';
+import { Product, ProductImageVariant, Category, PopupAd, FAQItem, PolicyItem, HomeAd, AdminUser, LookbookImage, CategoryBanner, Coupon, Order, AdminPermissions, Review, Announcement, SocialLink, CartItem } from '../types';
 import Swal from 'sweetalert2';
 import * as XLSX from 'xlsx';
 import { compressImage, fileToBase64 } from '../lib/imageUtils';
+import { formatOrderId } from '../lib/invoiceUtils';
+import { apiUrl } from '../lib/api';
 
 const SummaryCard = ({ title, count, icon: Icon, alert }: { title: string, count: number, icon: any, alert?: React.ReactNode }) => (
   <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex items-center gap-4 relative overflow-hidden">
@@ -243,6 +245,19 @@ function AdminContactInfoView() {
     emailSubtitle: contactInfo?.emailSubtitle || ''
   });
 
+  useEffect(() => {
+    if (contactInfo) {
+      setFormData({
+        storeAddress: contactInfo.storeAddress || '',
+        storeAddressSubtitle: contactInfo.storeAddressSubtitle || '',
+        phone: contactInfo.phone || '',
+        phoneSubtitle: contactInfo.phoneSubtitle || '',
+        email: contactInfo.email || '',
+        emailSubtitle: contactInfo.emailSubtitle || ''
+      });
+    }
+  }, [contactInfo]);
+
   const handleSave = () => {
     updateContactInfo(formData);
     Swal.fire('Updated!', 'Contact info updated successfully.', 'success');
@@ -303,8 +318,9 @@ function AdminContactInfoView() {
 
 function AdminAnnouncementsView() {
   const { announcements, addAnnouncement, updateAnnouncement, deleteAnnouncement } = useShop();
-  const [isAdding, setIsAdding] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<Announcement | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
   const [formData, setFormData] = useState({
     text: '',
     link: '',
@@ -317,285 +333,458 @@ function AdminAnnouncementsView() {
   });
 
   const resetForm = () => {
-    setFormData({ text: '', link: '', isActive: true, isMarquee: false, startDate: '', endDate: '', backgroundColor: '#000000', textColor: '#ffffff' });
+    setFormData({
+      text: '',
+      link: '',
+      isActive: true,
+      isMarquee: false,
+      startDate: '',
+      endDate: '',
+      backgroundColor: '#000000',
+      textColor: '#ffffff'
+    });
     setEditingAnnouncement(null);
-    setIsAdding(false);
+    setIsModalOpen(false);
+  };
+
+  const handleOpenCreate = () => {
+    resetForm();
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (ann: Announcement) => {
+    setEditingAnnouncement(ann);
+    setFormData({
+      text: ann.text || '',
+      link: ann.link || '',
+      isActive: ann.isActive !== false,
+      isMarquee: Boolean(ann.isMarquee),
+      startDate: ann.startDate || '',
+      endDate: ann.endDate || '',
+      backgroundColor: ann.backgroundColor || '#000000',
+      textColor: ann.textColor || '#ffffff'
+    });
+    setIsModalOpen(true);
   };
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.text.trim()) return;
+    if (!formData.text.trim()) {
+      Swal.fire('Error', 'অনুগ্রহ করে অ্যানাউন্সমেন্ট টেক্সট লিখুন।', 'error');
+      return;
+    }
 
     if (editingAnnouncement) {
-      updateAnnouncement({ ...editingAnnouncement, ...formData });
+      updateAnnouncement({ ...editingAnnouncement, ...formData, text: formData.text.trim(), link: formData.link.trim() });
       Swal.fire('Updated!', 'Announcement updated successfully.', 'success');
     } else {
-      addAnnouncement(formData);
-      Swal.fire('Added!', 'New announcement added successfully.', 'success');
+      addAnnouncement({ ...formData, text: formData.text.trim(), link: formData.link.trim() });
+      Swal.fire('Added!', 'New announcement created successfully.', 'success');
     }
     resetForm();
   };
 
+  const handleToggleStatus = (ann: Announcement) => {
+    updateAnnouncement({ ...ann, isActive: !ann.isActive });
+  };
+
+  const COLOR_PRESETS = [
+    { label: 'Black', bg: '#000000', text: '#ffffff' },
+    { label: 'Crimson', bg: '#dc2626', text: '#ffffff' },
+    { label: 'Amber', bg: '#d97706', text: '#000000' },
+    { label: 'Emerald', bg: '#059669', text: '#ffffff' },
+    { label: 'Indigo', bg: '#4f46e5', text: '#ffffff' },
+    { label: 'Dark Slate', bg: '#1e293b', text: '#facc15' },
+  ];
+
+  const filteredAnnouncements = announcements.filter(a => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase();
+    return (a.text && a.text.toLowerCase().includes(q)) || (a.link && a.link.toLowerCase().includes(q));
+  });
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 border-b border-gray-100 pb-4">
         <div>
-          <h1 className="text-2xl font-black uppercase tracking-tight text-gray-900">Manage Announcements </h1>
-          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-1"></p>
+          <h1 className="text-2xl font-black uppercase tracking-tight text-gray-900 flex items-center gap-2">
+            <Megaphone className="h-6 w-6 text-black" /> Manage Announcements
+          </h1>
+          <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-1">
+            ওয়েবসাইটের টপ বারে নোটিশ, প্রচার বা স্পেশাল অফার প্রদর্শন ও মডালের মাধ্যমে নিয়ন্ত্রণ করুন
+          </p>
         </div>
         <button 
-          onClick={() => {
-            resetForm();
-            setIsAdding(true);
-          }}
+          onClick={handleOpenCreate}
           className="bg-black text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-black/10 hover:bg-gray-800 transition-all active:scale-95"
         >
-          <Plus size={14} className="stroke-[3]" /> Add New Announcement
+          <Plus size={14} className="stroke-[3]" /> Create New Announcement
         </button>
       </div>
 
+      {/* Filter and stats row */}
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="অ্যানাউন্সমেন্ট খুঁজুন..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 text-xs font-medium border border-gray-200 rounded-xl bg-gray-50/50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-black/10"
+          />
+        </div>
+        <div className="flex items-center gap-2 text-xs font-bold text-gray-500 self-end sm:self-center">
+          <span className="px-3 py-1 bg-gray-100 rounded-lg">Total: {announcements.length}</span>
+          <span className="px-3 py-1 bg-green-50 text-green-700 rounded-lg">Active: {announcements.filter(a => a.isActive).length}</span>
+        </div>
+      </div>
+
+      {/* Announcements Modal (Create / Edit) */}
       <AnimatePresence>
-        {isAdding && (
+        {isModalOpen && (
           <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 shadow-2xl shadow-black/5 space-y-6 relative overflow-hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto"
+            onClick={resetForm}
           >
-            <div className="absolute top-0 left-0 w-2 h-full bg-black"></div>
-            <h3 className="text-sm font-black uppercase tracking-widest text-gray-900 flex items-center gap-2">
-              <div className="w-1.5 h-4 bg-black rounded-full"></div>
-              {editingAnnouncement ? 'Edit Announcement' : 'Create New Announcement'}
-            </h3>
-            <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="md:col-span-2 space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Announcement Text (ঘোষণা টেক্সট)</label>
-                <textarea 
-                  required
-                  rows={2}
-                  className="w-full border border-gray-200 rounded-2xl px-5 py-3.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-sm font-medium bg-gray-50/50"
-                  placeholder="যেমন- Special Offer: Free delivery on orders over ৳1500!"
-                  value={formData.text}
-                  onChange={e => setFormData({...formData, text: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Destination Link (Optional)</label>
-                <input 
-                  type="text" 
-                  className="w-full border border-gray-200 rounded-2xl px-5 py-3.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-sm font-medium bg-gray-50/50"
-                  placeholder="যেমন- /shop বা /product/123"
-                  value={formData.link}
-                  onChange={e => setFormData({...formData, link: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Start Date & Time (Optional)</label>
-                <input 
-                  type="datetime-local" 
-                  className="w-full border border-gray-200 rounded-2xl px-5 py-3.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-sm font-medium bg-gray-50/50"
-                  value={formData.startDate}
-                  onChange={e => setFormData({...formData, startDate: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">End Date & Time (Optional)</label>
-                <input 
-                  type="datetime-local" 
-                  className="w-full border border-gray-200 rounded-2xl px-5 py-3.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-sm font-medium bg-gray-50/50"
-                  value={formData.endDate}
-                  onChange={e => setFormData({...formData, endDate: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Background Color</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="color" 
-                    className="h-12 w-12 border-none rounded-lg cursor-pointer"
-                    value={formData.backgroundColor}
-                    onChange={e => setFormData({...formData, backgroundColor: e.target.value})}
-                  />
-                  <input 
-                    type="text"
-                    className="flex-1 border border-gray-200 rounded-2xl px-5 py-3.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-sm font-mono bg-gray-50/50"
-                    value={formData.backgroundColor}
-                    onChange={e => setFormData({...formData, backgroundColor: e.target.value})}
-                  />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              transition={{ duration: 0.2 }}
+              onClick={e => e.stopPropagation()}
+              className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 shadow-2xl w-full max-w-2xl space-y-6 relative overflow-hidden my-8 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="absolute top-0 left-0 w-2 h-full bg-black"></div>
+              
+              {/* Modal Header */}
+              <div className="flex justify-between items-start border-b border-gray-100 pb-4">
+                <div>
+                  <h3 className="text-base md:text-lg font-black uppercase tracking-widest text-gray-900 flex items-center gap-2.5">
+                    <div className="w-2 h-5 bg-black rounded-full"></div>
+                    {editingAnnouncement ? 'Edit Announcement' : 'Create New Announcement'}
+                  </h3>
+                  <p className="text-[11px] font-bold text-gray-400 mt-1 ml-4">
+                    {editingAnnouncement
+                      ? 'অ্যানাউন্সমেন্ট টেক্সট, সময়সূচী বা ডিজাইন মডাল থেকে পরিবর্তন করুন'
+                      : 'নতুন নোটিশ বা অফার তৈরি করে ওয়েবসাইটের শীর্ষে প্রদর্শন করুন'}
+                  </p>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Text Color</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="color" 
-                    className="h-12 w-12 border-none rounded-lg cursor-pointer"
-                    value={formData.textColor}
-                    onChange={e => setFormData({...formData, textColor: e.target.value})}
-                  />
-                  <input 
-                    type="text"
-                    className="flex-1 border border-gray-200 rounded-2xl px-5 py-3.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-sm font-mono bg-gray-50/50"
-                    value={formData.textColor}
-                    onChange={e => setFormData({...formData, textColor: e.target.value})}
-                  />
-                </div>
-              </div>
-              <div className="flex items-center gap-6 bg-gray-50 p-4 rounded-xl border border-gray-100 md:col-span-2">
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="checkbox" 
-                    id="ann-active" 
-                    checked={formData.isActive} 
-                    onChange={e => setFormData({...formData, isActive: e.target.checked})} 
-                    className="w-4 h-4 text-black focus:ring-black" 
-                  />
-                  <label htmlFor="ann-active" className="text-xs font-bold uppercase tracking-widest text-gray-900 cursor-pointer select-none">Active (সক্রিয়)</label>
-                </div>
-                <div className="flex items-center gap-3">
-                  <input 
-                    type="checkbox" 
-                    id="ann-marquee" 
-                    checked={formData.isMarquee} 
-                    onChange={e => setFormData({...formData, isMarquee: e.target.checked})} 
-                    className="w-4 h-4 text-black focus:ring-black" 
-                  />
-                  <label htmlFor="ann-marquee" className="text-xs font-bold uppercase tracking-widest text-gray-900 cursor-pointer select-none">Marquee Effect (স্ক্রোলিং টেক্সট)</label>
-                </div>
-              </div>
-              <div className="md:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-100">
-                <button 
+                <button
                   type="button"
                   onClick={resetForm}
-                  className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors"
+                  className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-colors"
                 >
-                  Cancel
-                </button>
-                <button 
-                  type="submit"
-                  className="bg-black text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-black/20 hover:bg-gray-800 transition-all active:scale-95"
-                >
-                  {editingAnnouncement ? 'Update Announcement' : 'Create Announcement'}
+                  <X size={20} />
                 </button>
               </div>
-            </form>
+
+              {/* Live Preview Bar */}
+              <div className="space-y-2">
+                <div className="flex justify-between items-center">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">
+                    Live Preview (লাইভ প্রিভিউ)
+                  </label>
+                  {formData.isMarquee && (
+                    <span className="text-[9px] font-black uppercase tracking-widest text-purple-600 bg-purple-50 px-2 py-0.5 rounded">
+                      Marquee Enabled
+                    </span>
+                  )}
+                </div>
+                <div 
+                  className="w-full py-2.5 px-4 rounded-xl text-center text-xs font-bold transition-all shadow-inner overflow-hidden border border-black/10"
+                  style={{
+                    backgroundColor: formData.backgroundColor || '#000000',
+                    color: formData.textColor || '#ffffff'
+                  }}
+                >
+                  {formData.isMarquee ? (
+                    <div className="whitespace-nowrap overflow-hidden text-ellipsis">
+                      <span className="inline-block animate-pulse">📢 {formData.text || 'আপনার অ্যানাউন্সমেন্ট টেক্সট এখানে দেখাবে...'}</span>
+                    </div>
+                  ) : (
+                    <span>📢 {formData.text || 'আপনার অ্যানাউন্সমেন্ট টেক্সট এখানে দেখাবে...'}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Form */}
+              <form onSubmit={handleSave} className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2 space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                    Announcement Text (ঘোষণা টেক্সট) <span className="text-red-500">*</span>
+                  </label>
+                  <textarea 
+                    required
+                    rows={2}
+                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-sm font-medium bg-gray-50/50 focus:bg-white resize-none"
+                    placeholder="যেমন- Special Offer: Free delivery on orders over ৳1500!"
+                    value={formData.text}
+                    onChange={e => setFormData({ ...formData, text: e.target.value })}
+                  />
+                </div>
+
+                <div className="md:col-span-2 space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                    Destination Link (ক্লিক করলে কোথায় যাবে - ঐচ্ছিক)
+                  </label>
+                  <input 
+                    type="text" 
+                    className="w-full border border-gray-200 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-sm font-medium bg-gray-50/50 focus:bg-white"
+                    placeholder="যেমন- /shop বা /product/p1 বা https://..."
+                    value={formData.link}
+                    onChange={e => setFormData({ ...formData, link: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                    Start Date & Time (শুরুর সময় - ঐচ্ছিক)
+                  </label>
+                  <input 
+                    type="datetime-local" 
+                    className="w-full border border-gray-200 rounded-2xl px-4 py-2.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-xs font-medium bg-gray-50/50 focus:bg-white"
+                    value={formData.startDate}
+                    onChange={e => setFormData({ ...formData, startDate: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                    End Date & Time (শেষের সময় - ঐচ্ছিক)
+                  </label>
+                  <input 
+                    type="datetime-local" 
+                    className="w-full border border-gray-200 rounded-2xl px-4 py-2.5 focus:ring-2 focus:ring-black focus:border-transparent outline-none transition-all text-xs font-medium bg-gray-50/50 focus:bg-white"
+                    value={formData.endDate}
+                    onChange={e => setFormData({ ...formData, endDate: e.target.value })}
+                  />
+                </div>
+
+                {/* Color Presets */}
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">
+                    Quick Color Presets (কালার প্যালেট)
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {COLOR_PRESETS.map((preset, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, backgroundColor: preset.bg, textColor: preset.text })}
+                        className="px-3 py-1.5 rounded-xl border border-gray-200 text-xs font-bold flex items-center gap-2 hover:border-black transition-colors"
+                      >
+                        <span className="w-3.5 h-3.5 rounded-full border border-gray-300" style={{ backgroundColor: preset.bg }}></span>
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Background Color</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="color" 
+                      className="h-10 w-12 border-none rounded-xl cursor-pointer p-0 bg-transparent"
+                      value={formData.backgroundColor}
+                      onChange={e => setFormData({ ...formData, backgroundColor: e.target.value })}
+                    />
+                    <input 
+                      type="text"
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-xs font-mono bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-black focus:outline-none"
+                      value={formData.backgroundColor}
+                      onChange={e => setFormData({ ...formData, backgroundColor: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-500 ml-1">Text Color</label>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="color" 
+                      className="h-10 w-12 border-none rounded-xl cursor-pointer p-0 bg-transparent"
+                      value={formData.textColor}
+                      onChange={e => setFormData({ ...formData, textColor: e.target.value })}
+                    />
+                    <input 
+                      type="text"
+                      className="flex-1 border border-gray-200 rounded-xl px-4 py-2 text-xs font-mono bg-gray-50/50 focus:bg-white focus:ring-2 focus:ring-black focus:outline-none"
+                      value={formData.textColor}
+                      onChange={e => setFormData({ ...formData, textColor: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* Toggles */}
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 md:col-span-2">
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={formData.isActive} 
+                      onChange={e => setFormData({ ...formData, isActive: e.target.checked })} 
+                      className="w-4 h-4 text-black focus:ring-black rounded" 
+                    />
+                    <span className="text-xs font-bold uppercase tracking-widest text-gray-900">Active (সক্রিয়)</span>
+                  </label>
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <input 
+                      type="checkbox" 
+                      checked={formData.isMarquee} 
+                      onChange={e => setFormData({ ...formData, isMarquee: e.target.checked })} 
+                      className="w-4 h-4 text-black focus:ring-black rounded" 
+                    />
+                    <span className="text-xs font-bold uppercase tracking-widest text-gray-900">Marquee Effect (স্ক্রোলিং টেক্সট)</span>
+                  </label>
+                </div>
+
+                {/* Actions */}
+                <div className="md:col-span-2 flex justify-end gap-3 pt-4 border-t border-gray-100">
+                  <button 
+                    type="button"
+                    onClick={resetForm}
+                    className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit"
+                    className="bg-black text-white px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-black/20 hover:bg-gray-800 transition-all active:scale-95"
+                  >
+                    {editingAnnouncement ? 'Update Announcement' : 'Create Announcement'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
 
+      {/* Announcements Table */}
       <div className="bg-white rounded-[32px] border border-gray-100 shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-gray-50/50">
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Content</th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Schedule</th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Styles</th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
-              <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-100">
-            {announcements.map(ann => (
-              <tr key={ann.id} className="group hover:bg-gray-50/50 transition-colors">
-                <td className="px-6 py-6">
-                  <div className="space-y-1">
-                    <p className="font-bold text-sm text-gray-900">{ann.text}</p>
-                    {ann.link && <p className="text-[10px] font-mono text-gray-400">{ann.link}</p>}
-                  </div>
-                </td>
-                <td className="px-6 py-6">
-                  {ann.startDate || ann.endDate ? (
-                    <div className="space-y-1 text-[10px] font-bold text-gray-500 uppercase tracking-tight">
-                      {ann.startDate && (
-                        <div className="flex items-center gap-1.5">
-                          <Calendar size={10} className="text-gray-400" /> 
-                          Start: {new Date(ann.startDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                        </div>
-                      )}
-                      {ann.endDate && (
-                        <div className="flex items-center gap-1.5">
-                          <Clock size={10} className="text-gray-400" /> 
-                          End: {new Date(ann.endDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
-                        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse min-w-[700px]">
+            <thead>
+              <tr className="bg-gray-50/50 border-b border-gray-100">
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Content</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Schedule</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Styles</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400">Status</th>
+                <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-gray-400 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filteredAnnouncements.map(ann => (
+                <tr key={ann.id} className="group hover:bg-gray-50/50 transition-colors">
+                  <td className="px-6 py-5">
+                    <div className="space-y-1 max-w-md">
+                      <p className="font-bold text-sm text-gray-900">{ann.text}</p>
+                      {ann.link && (
+                        <p className="text-[10px] font-mono text-gray-400 inline-block bg-gray-50 px-2 py-0.5 rounded border border-gray-200">
+                          🔗 {ann.link}
+                        </p>
                       )}
                     </div>
-                  ) : (
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">Always Visible</span>
-                  )}
-                </td>
-                <td className="px-6 py-6">
-                  <div className="flex gap-2">
-                    <div className="w-6 h-6 rounded border border-gray-200" style={{ backgroundColor: ann.backgroundColor }} title={`BG: ${ann.backgroundColor}`}></div>
-                    <div className="w-6 h-6 rounded border border-gray-200" style={{ backgroundColor: ann.textColor }} title={`Text: ${ann.textColor}`}></div>
-                  </div>
-                </td>
-                <td className="px-6 py-6">
-                  <div className="flex flex-col gap-1.5">
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest w-fit ${ann.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                      {ann.isActive ? 'Active' : 'Inactive'}
-                    </span>
-                    {ann.isMarquee && (
-                      <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest w-fit bg-purple-100 text-purple-700">
-                        Marquee
-                      </span>
+                  </td>
+                  <td className="px-6 py-5">
+                    {ann.startDate || ann.endDate ? (
+                      <div className="space-y-1 text-[10px] font-bold text-gray-500 uppercase tracking-tight">
+                        {ann.startDate && (
+                          <div className="flex items-center gap-1.5">
+                            <Calendar size={11} className="text-gray-400" /> 
+                            Start: {new Date(ann.startDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                          </div>
+                        )}
+                        {ann.endDate && (
+                          <div className="flex items-center gap-1.5">
+                            <Clock size={11} className="text-gray-400" /> 
+                            End: {new Date(ann.endDate).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest italic">Always Visible</span>
                     )}
-                  </div>
-                </td>
-                <td className="px-6 py-6 text-right">
-                  <div className="flex justify-end gap-1">
-                    <button 
-                      onClick={() => {
-                        resetForm(); // Reset first to clear any stale state
-                        setEditingAnnouncement(ann);
-                        setFormData({
-                          text: ann.text,
-                          link: ann.link || '',
-                          isActive: ann.isActive,
-                          isMarquee: ann.isMarquee || false,
-                          startDate: ann.startDate || '',
-                          endDate: ann.endDate || '',
-                          backgroundColor: ann.backgroundColor || '#000000',
-                          textColor: ann.textColor || '#ffffff'
-                        });
-                        setIsAdding(true);
-                      }}
-                      className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-xl transition-all"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button 
-                      onClick={async () => {
-                        const res = await Swal.fire({
-                          title: 'Delete Announcement?',
-                          text: "This action cannot be undone.",
-                          icon: 'warning',
-                          showCancelButton: true,
-                          confirmButtonColor: '#000',
-                          cancelButtonColor: '#d33',
-                          confirmButtonText: 'Delete'
-                        });
-                        if (res.isConfirmed) {
-                          deleteAnnouncement(ann.id);
-                          Swal.fire('Deleted!', '', 'success');
-                        }
-                      }}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-            {announcements.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic text-sm">
-                  No announcements found. Add one to show at the top of the site.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                  </td>
+                  <td className="px-6 py-5">
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-[10px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1.5"
+                        style={{ backgroundColor: ann.backgroundColor || '#000000', color: ann.textColor || '#ffffff' }}
+                      >
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ann.textColor || '#ffffff' }}></span>
+                        Sample
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-5">
+                    <div className="flex flex-col gap-1.5">
+                      <button
+                        onClick={() => handleToggleStatus(ann)}
+                        title="Click to toggle status"
+                        className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest w-fit transition-all ${
+                          ann.isActive 
+                            ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                        }`}
+                      >
+                        {ann.isActive ? 'Active' : 'Inactive'}
+                      </button>
+                      {ann.isMarquee && (
+                        <span className="px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest w-fit bg-purple-100 text-purple-700">
+                          Marquee
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                  <td className="px-6 py-5 text-right">
+                    <div className="flex justify-end gap-1.5">
+                      <button 
+                        onClick={() => handleOpenEdit(ann)}
+                        title="Edit Announcement via Modal"
+                        className="p-2 text-gray-500 hover:text-black hover:bg-gray-100 rounded-xl transition-all border border-transparent hover:border-gray-200"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button 
+                        onClick={async () => {
+                          const res = await Swal.fire({
+                            title: 'Delete Announcement?',
+                            text: "This action cannot be undone.",
+                            icon: 'warning',
+                            showCancelButton: true,
+                            confirmButtonColor: '#000',
+                            cancelButtonColor: '#d33',
+                            confirmButtonText: 'Delete'
+                          });
+                          if (res.isConfirmed) {
+                            deleteAnnouncement(ann.id);
+                            Swal.fire('Deleted!', '', 'success');
+                          }
+                        }}
+                        title="Delete Announcement"
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-all border border-transparent hover:border-red-100"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredAnnouncements.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-12 text-center text-gray-400 italic text-sm">
+                    {searchQuery ? 'কোনো অ্যানাউন্সমেন্ট খুঁজে পাওয়া যায়নি।' : 'No announcements found. Add one to show at the top of the site.'}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -605,23 +794,46 @@ function AdminCategoriesView() {
     const { categories, addCategory, updateCategory, deleteCategory } = useShop();
     const [isAdding, setIsAdding] = useState(false);
     const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-    const [newCat, setNewCat] = useState({ name: '', slug: '' });
+    const [newCat, setNewCat] = useState({ name: '', slug: '', subCategories: [] as string[] });
+    const [subInput, setSubInput] = useState('');
 
     const resetForm = () => {
-      setNewCat({ name: '', slug: '' });
+      setNewCat({ name: '', slug: '', subCategories: [] });
+      setSubInput('');
       setEditingCategory(null);
       setIsAdding(false);
+    };
+
+    const handleAddSubCat = () => {
+      const trimmed = subInput.trim();
+      if (!trimmed) return;
+      const items = trimmed.split(',').map(s => s.trim()).filter(Boolean);
+      const unique = Array.from(new Set([...(newCat.subCategories || []), ...items]));
+      setNewCat({ ...newCat, subCategories: unique });
+      setSubInput('');
+    };
+
+    const handleRemoveSubCat = (subToRemove: string) => {
+      setNewCat({
+        ...newCat,
+        subCategories: (newCat.subCategories || []).filter(s => s !== subToRemove)
+      });
     };
 
     const handleSave = () => {
       if (!newCat.name.trim()) return;
       const slug = newCat.slug.trim() || newCat.name.trim().toLowerCase().replace(/\s+/g, '-');
+      let finalSubCats = [...(newCat.subCategories || [])];
+      if (subInput.trim()) {
+        const extra = subInput.split(',').map(s => s.trim()).filter(Boolean);
+        finalSubCats = Array.from(new Set([...finalSubCats, ...extra]));
+      }
       
       if (editingCategory) {
-        updateCategory({ ...editingCategory, name: newCat.name.trim(), slug });
+        updateCategory({ ...editingCategory, name: newCat.name.trim(), slug, subCategories: finalSubCats });
         Swal.fire('Updated!', 'Category updated successfully.', 'success');
       } else {
-        addCategory({ name: newCat.name.trim(), slug });
+        addCategory({ name: newCat.name.trim(), slug, subCategories: finalSubCats });
         Swal.fire('Added!', 'New category added successfully.', 'success');
       }
       resetForm();
@@ -631,66 +843,159 @@ function AdminCategoriesView() {
       <div className="space-y-6">
         <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
           <div>
-            <h1 className="text-2xl font-black uppercase tracking-tight text-gray-900">Manage Categories</h1>
-            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-1"></p>
+            <h1 className="text-2xl font-black uppercase tracking-tight text-gray-900">Manage Categories & Sub-Categories</h1>
+            <p className="text-xs text-gray-500 font-bold uppercase tracking-wider mt-1">ক্যাটাগরি এবং তার অধীনে থাকা সাব-ক্যাটাগরি ম্যানেজ করুন</p>
           </div>
           <button 
-            onClick={() => setIsAdding(true)}
+            onClick={() => {
+              setEditingCategory(null);
+              setNewCat({ name: '', slug: '', subCategories: [] });
+              setSubInput('');
+              setIsAdding(true);
+            }}
             className="bg-black text-white px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-xl shadow-black/10 hover:bg-gray-800 transition-all active:scale-95"
           >
-            <Plus size={14} className="stroke-[3]" /> Add New Category
+            <Plus size={14} className="stroke-[3]" /> Create New Category
           </button>
         </div>
 
         <AnimatePresence>
           {isAdding && (
             <motion.div 
-              initial={{ opacity: 0, y: -20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 shadow-2xl shadow-black/5 space-y-6 relative overflow-hidden"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[150] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 overflow-y-auto"
+              onClick={resetForm}
             >
-              <div className="absolute top-0 left-0 w-2 h-full bg-black"></div>
-              <h3 className="text-sm font-black uppercase tracking-widest text-gray-900 flex items-center gap-2">
-                <div className="w-1.5 h-4 bg-black rounded-full"></div>
-                {editingCategory ? 'Edit Category' : 'Create New Category'}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Category Name (নাম)</label>
-                  <input 
-                    type="text" 
-                    value={newCat.name}
-                    onChange={e => setNewCat({ ...newCat, name: e.target.value })}
-                    placeholder="e.g. Premium T-Shirts"
-                    className="w-full text-xs font-bold border border-gray-100 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-black/5 focus:border-black outline-none bg-gray-50/50 focus:bg-white transition-all placeholder:text-gray-300" 
-                  />
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                transition={{ duration: 0.2 }}
+                onClick={e => e.stopPropagation()}
+                className="bg-white p-6 md:p-8 rounded-[32px] border border-gray-100 shadow-2xl w-full max-w-2xl space-y-6 relative overflow-hidden my-8 max-h-[88vh] overflow-y-auto"
+              >
+                <div className="absolute top-0 left-0 w-2 h-full bg-black"></div>
+                <div className="flex justify-between items-center border-b border-gray-100 pb-4">
+                  <div>
+                    <h3 className="text-base md:text-lg font-black uppercase tracking-widest text-gray-900 flex items-center gap-2.5">
+                      <div className="w-2 h-5 bg-black rounded-full"></div>
+                      {editingCategory ? 'Edit Category & Sub-Categories' : 'Create New Category'}
+                    </h3>
+                    <p className="text-[11px] font-bold text-gray-400 mt-1 ml-4">
+                      {editingCategory
+                        ? 'ক্যাটাগরির নাম, স্ল্যাগ এবং সাব-ক্যাটাগরি পরিবর্তন করুন'
+                        : 'নতুন ক্যাটাগরি এবং তার অধীনে সাব-ক্যাটাগরি তৈরি করুন'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={resetForm}
+                    className="p-2 text-gray-400 hover:text-black hover:bg-gray-100 rounded-full transition-colors"
+                    title="Close Modal"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Slug (ঐচ্ছিক স্ল্যাগ)</label>
-                  <input 
-                    type="text" 
-                    value={newCat.slug}
-                    onChange={e => setNewCat({ ...newCat, slug: e.target.value })}
-                    placeholder="e.g. premium-tshirts"
-                    className="w-full text-xs font-bold border border-gray-100 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-black/5 focus:border-black outline-none bg-gray-50/50 focus:bg-white transition-all placeholder:text-gray-300" 
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 pt-4">
-                <button 
-                  onClick={resetForm}
-                  className="px-6 py-3 text-[10px] font-black uppercase tracking-widest text-gray-400 hover:text-red-500 transition-all"
+
+                <form
+                  onSubmit={e => {
+                    e.preventDefault();
+                    handleSave();
+                  }}
+                  className="space-y-6"
                 >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleSave}
-                  className="bg-black text-white px-10 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl shadow-black/20 transition-all active:scale-95 hover:bg-gray-800"
-                >
-                  {editingCategory ? 'Update Category' : 'Save Category'}
-                </button>
-              </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Category Name (নাম)</label>
+                      <input 
+                        type="text" 
+                        required
+                        autoFocus
+                        value={newCat.name}
+                        onChange={e => setNewCat({ ...newCat, name: e.target.value })}
+                        placeholder="e.g. Premium T-Shirts"
+                        className="w-full text-xs font-bold border border-gray-200 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-black/5 focus:border-black outline-none bg-gray-50/50 focus:bg-white transition-all placeholder:text-gray-300" 
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Slug (ঐচ্ছিক স্ল্যাগ)</label>
+                      <input 
+                        type="text" 
+                        value={newCat.slug}
+                        onChange={e => setNewCat({ ...newCat, slug: e.target.value })}
+                        placeholder="e.g. premium-tshirts"
+                        className="w-full text-xs font-bold border border-gray-200 rounded-2xl px-5 py-4 focus:ring-2 focus:ring-black/5 focus:border-black outline-none bg-gray-50/50 focus:bg-white transition-all placeholder:text-gray-300" 
+                      />
+                    </div>
+                    <div className="md:col-span-2 space-y-3">
+                      <label className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-1">Sub-Categories (সাব-ক্যাটাগরি যোগ করুন)</label>
+                      <div className="flex flex-col sm:flex-row gap-2">
+                        <input
+                          type="text"
+                          value={subInput}
+                          onChange={e => setSubInput(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleAddSubCat();
+                            }
+                          }}
+                          placeholder="সাব-ক্যাটাগরির নাম লিখুন (যেমন: Drop Shoulder, Polo, Half Sleeve) এবং Add বাটনে ক্লিক করুন..."
+                          className="flex-1 text-xs font-bold border border-gray-200 rounded-2xl px-5 py-3.5 focus:ring-2 focus:ring-black/5 focus:border-black outline-none bg-gray-50/50 focus:bg-white transition-all placeholder:text-gray-300"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddSubCat}
+                          className="bg-gray-900 hover:bg-black text-white px-6 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap flex items-center justify-center gap-1.5"
+                        >
+                          <Plus size={14} /> Add Sub-Category
+                        </button>
+                      </div>
+                      {(newCat.subCategories || []).length > 0 ? (
+                        <div className="flex flex-wrap gap-2 pt-2 p-4 bg-gray-50 rounded-2xl border border-gray-100">
+                          {(newCat.subCategories || []).map(sub => (
+                            <span
+                              key={sub}
+                              className="inline-flex items-center gap-2 px-3.5 py-1.5 bg-white text-gray-900 rounded-xl text-xs font-bold border border-gray-200 shadow-sm"
+                            >
+                              <span>{sub}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSubCat(sub)}
+                                className="text-gray-400 hover:text-red-500 transition-colors"
+                                title="Remove Sub-Category"
+                              >
+                                <X size={13} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[11px] font-medium text-gray-400 ml-1">
+                          এখনও কোনো সাব-ক্যাটাগরি যোগ করা হয়নি। কমা (,) দিয়ে একসাথে একাধিক সাব-ক্যাটাগরি যোগ করতে পারবেন।
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+                    <button 
+                      type="button"
+                      onClick={resetForm}
+                      className="px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest text-gray-500 hover:bg-gray-100 hover:text-red-500 transition-all"
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      type="submit"
+                      className="bg-black text-white px-10 py-3.5 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-2xl shadow-black/20 transition-all active:scale-95 hover:bg-gray-800"
+                    >
+                      {editingCategory ? 'Update Category' : 'Save Category'}
+                    </button>
+                  </div>
+                </form>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -700,6 +1005,7 @@ function AdminCategoriesView() {
             <thead>
               <tr className="bg-gray-50/50 border-b border-gray-100">
                 <th className="p-5 pl-10 font-black uppercase text-[10px] text-gray-400 tracking-widest">Category Name</th>
+                <th className="p-5 font-black uppercase text-[10px] text-gray-400 tracking-widest">Sub-Categories</th>
                 <th className="p-5 font-black uppercase text-[10px] text-gray-400 tracking-widest">URL Slug</th>
                 <th className="p-5 font-black uppercase text-[10px] text-gray-400 tracking-widest text-right pr-10">Actions</th>
               </tr>
@@ -707,7 +1013,7 @@ function AdminCategoriesView() {
             <tbody className="divide-y divide-gray-50">
               {categories.length === 0 ? (
                 <tr>
-                  <td colSpan={3} className="p-20 text-center">
+                  <td colSpan={4} className="p-20 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <div className="w-16 h-16 bg-gray-50 rounded-3xl flex items-center justify-center">
                         <TrendingUp className="h-8 w-8 text-gray-200" />
@@ -729,6 +1035,19 @@ function AdminCategoriesView() {
                       </div>
                     </td>
                     <td className="p-5">
+                      {(cat.subCategories && cat.subCategories.length > 0) ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {cat.subCategories.map(sub => (
+                            <span key={sub} className="px-2.5 py-1 text-[10px] font-bold uppercase bg-gray-100 text-gray-700 rounded-lg border border-gray-200">
+                              {sub}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] font-bold text-gray-300 uppercase">No Sub-Categories</span>
+                      )}
+                    </td>
+                    <td className="p-5">
                       <span className="px-3 py-1 font-mono text-[9px] font-black uppercase text-gray-400 bg-gray-50 border border-gray-100 rounded-lg group-hover:bg-white transition-colors">
                         /shop?category={cat.slug}
                       </span>
@@ -738,7 +1057,8 @@ function AdminCategoriesView() {
                         <button 
                           onClick={() => {
                             setEditingCategory(cat);
-                            setNewCat({ name: cat.name, slug: cat.slug });
+                            setNewCat({ name: cat.name, slug: cat.slug, subCategories: cat.subCategories || [] });
+                            setSubInput('');
                             setIsAdding(true);
                           }}
                           className="p-2.5 text-gray-400 hover:text-black hover:bg-white hover:shadow-lg hover:shadow-black/5 rounded-xl transition-all"
@@ -924,6 +1244,7 @@ function AdminReviewsView() {
       r.userName.toLowerCase().includes(search.toLowerCase()) ||
       r.comment.toLowerCase().includes(search.toLowerCase()) ||
       r.orderId.toLowerCase().includes(search.toLowerCase()) ||
+      formatOrderId(r.orderId).toLowerCase().includes(search.toLowerCase()) ||
       productName.includes(search.toLowerCase());
       
     const matchesStatus = statusFilter === 'all' || r.status === statusFilter;
@@ -1007,7 +1328,7 @@ function AdminReviewsView() {
                       <td className="p-4 pl-6">
                         <div className="flex flex-col">
                           <span className="text-gray-900">{review.userName}</span>
-                          <span className="text-[10px] text-indigo-500 font-black">{review.orderId}</span>
+                          <span className="text-[10px] text-indigo-500 font-black">{formatOrderId(review.orderId)}</span>
                         </div>
                       </td>
                       <td className="p-4">
@@ -1108,12 +1429,26 @@ function AdminPriceAnalysisView() {
   const { products, categories } = useShop();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedSubCategory, setSelectedSubCategory] = useState('all');
+
+  const analysisSubCategories = React.useMemo(() => {
+    if (selectedCategory === 'all') return [];
+    const catObj = categories.find(c => c.name === selectedCategory);
+    const fromCat = catObj?.subCategories || [];
+    const fromProds = products.filter(p => p.category === selectedCategory && p.subCategory).map(p => p.subCategory as string);
+    return Array.from(new Set([...fromCat, ...fromProds])).filter(Boolean);
+  }, [selectedCategory, categories, products]);
 
   const filteredProducts = products.filter(p => {
-    const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                         (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()));
+    const q = searchTerm.toLowerCase().trim();
+    const matchesSearch = !q ||
+      p.name.toLowerCase().includes(q) || 
+      (p.code && p.code.toLowerCase().includes(q)) ||
+      (p.variantCodes && p.variantCodes.some(vc => vc.toLowerCase().includes(q))) ||
+      (p.imageVariants && p.imageVariants.some(v => (v.code && v.code.toLowerCase().includes(q)) || (v.title && v.title.toLowerCase().includes(q))));
     const matchesCategory = selectedCategory === 'all' || p.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    const matchesSubCategory = selectedSubCategory === 'all' || p.subCategory === selectedSubCategory;
+    return matchesSearch && matchesCategory && matchesSubCategory;
   });
 
   const totalCostValue = filteredProducts.reduce((acc, p) => acc + ((p.costPrice || 0) * (p.stock || 0)), 0);
@@ -1188,13 +1523,28 @@ function AdminPriceAnalysisView() {
         <select 
           className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none appearance-none cursor-pointer pr-10"
           value={selectedCategory}
-          onChange={(e) => setSelectedCategory(e.target.value)}
+          onChange={(e) => {
+            setSelectedCategory(e.target.value);
+            setSelectedSubCategory('all');
+          }}
         >
           <option value="all">All Categories</option>
           {categories.map(cat => (
             <option key={cat.id} value={cat.name}>{cat.name}</option>
           ))}
         </select>
+        {selectedCategory !== 'all' && analysisSubCategories.length > 0 && (
+          <select
+            className="px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none appearance-none cursor-pointer pr-10"
+            value={selectedSubCategory}
+            onChange={(e) => setSelectedSubCategory(e.target.value)}
+          >
+            <option value="all">All Sub-Categories</option>
+            {analysisSubCategories.map(sub => (
+              <option key={sub} value={sub}>{sub}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Product Analysis Table */}
@@ -1232,6 +1582,15 @@ function AdminPriceAnalysisView() {
                         <div>
                           <p className="text-sm font-bold text-gray-900 leading-tight">{product.name}</p>
                           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-0.5">{product.code || 'NO-CODE'}</p>
+                          {(product.variantCodes && product.variantCodes.length > 0) && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {product.variantCodes.map((vc, vIdx) => (
+                                <span key={vIdx} className="text-[8px] font-mono font-bold bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">
+                                  {vc}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -1283,16 +1642,16 @@ export default function AdminDashboard() {
   } | null>(null);
 
   useEffect(() => {
-    fetch('/api/db/status')
+    fetch(apiUrl('/api/db/status'))
       .then(res => res.json())
       .then(data => setDbStatus(data))
       .catch(err => console.warn('Could not fetch db status:', err));
   }, []);
-  const { products, reviews, updateReviewStatus, deleteReview, orders, coupons, slides, updateSlide, categoryBanners, updateCategoryBanner, lookbook, subscribers, contactMessages, popupAds, homeAds, faqs, policies, categories, addCategory, updateCategory, deleteCategory, addProduct, updateProduct, deleteProduct, updateOrderStatus, updateOrderNotes, updateOrder, deleteOrder, addCoupon, updateCoupon, deleteCoupon, addSlide, deleteSlide, addCategoryBanner, deleteCategoryBanner, addLookbookImage, updateLookbookImage, updateLookbookList, deleteLookbookImage, deleteSubscriber, deleteContactMessage, addPopupAd, deletePopupAd, updatePopupAd, addHomeAd, deleteHomeAd, updateHomeAd, addFAQ, updateFAQ, deleteFAQ, addPolicy, updatePolicy, deletePolicy, isAdminAuth, loginAdmin, logoutAdmin, updateProfile, currentAdmin, admins, addAdmin, updateAdmin, deleteAdmin } = useShop();
+  const { products, reviews, updateReviewStatus, deleteReview, orders, coupons, slides, updateSlide, categoryBanners, updateCategoryBanner, lookbook, subscribers, contactMessages, popupAds, homeAds, faqs, policies, categories, addCategory, updateCategory, deleteCategory, addProduct, updateProduct, updateProductSerials, deleteProduct, updateOrderStatus, updateOrderNotes, updateOrder, deleteOrder, addCoupon, updateCoupon, deleteCoupon, addSlide, deleteSlide, addCategoryBanner, deleteCategoryBanner, addLookbookImage, updateLookbookImage, updateLookbookList, deleteLookbookImage, deleteSubscriber, deleteContactMessage, addPopupAd, deletePopupAd, updatePopupAd, addHomeAd, deleteHomeAd, updateHomeAd, addFAQ, updateFAQ, deleteFAQ, addPolicy, updatePolicy, deletePolicy, isAdminAuth, loginAdmin, logoutAdmin, updateProfile, currentAdmin, admins, addAdmin, updateAdmin, deleteAdmin } = useShop();
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'shop' | 'collection' | 'orders' | 'coupons' | 'slides' | 'categories' | 'lookbook' | 'subscribers' | 'messages' | 'ads' | 'faqs' | 'policies' | 'admins' | 'profile' | 'reviews' | 'activities' | 'otps' | 'contactinfo' | 'settings' | 'socials' | 'analysis'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'shop' | 'collection' | 'orders' | 'coupons' | 'slides' | 'categories' | 'lookbook' | 'subscribers' | 'messages' | 'ads' | 'faqs' | 'policies' | 'admins' | 'profile' | 'reviews' | 'activities' | 'otps' | 'contactinfo' | 'settings' | 'socials' | 'analysis' | 'categoriesBanner' | 'announcements'>('dashboard');
   const mainScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1521,6 +1880,8 @@ export default function AdminDashboard() {
 
   const handlePrintInvoice = (order: any) => {
     const { actualShipping, actualTotalPayable } = getOrderTotals(order);
+    const formattedOrderId = formatOrderId(order.id);
+    const formattedAddress = (order.customer.address || '').replace(/\r?\n+/g, ', ').trim();
 
     const itemsHtml = order.items.map((item: any) => `
       <tr>
@@ -1551,7 +1912,7 @@ export default function AdminDashboard() {
 
         <div class="info-bar">
           <div>
-            <p style="margin: 2px 0; font-size: 9px;"><strong>Order ID:</strong> #${order.id}</p>
+            <p style="margin: 2px 0; font-size: 9px;"><strong>Order ID:</strong> #${formattedOrderId}</p>
             <p style="margin: 2px 0; font-size: 8px; color: #555;"><strong>Invoice Date:</strong> ${new Date(order.date).toLocaleString()}</p>
           </div>
           <div style="font-size: 9px; text-transform: uppercase; font-weight: bold; color: #888;">Customer Copy / গ্রাহক কপি</div>
@@ -1577,7 +1938,7 @@ export default function AdminDashboard() {
             <p><strong>Phone:</strong> ${order.customer.phone}</p>
             <p><strong>Email:</strong> ${order.customer.email || 'N/A'}</p>
             <p><strong>District:</strong> ${order.customer.district || 'N/A'}</p>
-            <p><strong>Address:</strong> ${order.customer.address}</p>
+            <p style="word-break: break-word; overflow-wrap: anywhere; line-height: 1.45;"><strong>Address:</strong> ${formattedAddress}</p>
           </div>
           
           <div class="totals">
@@ -1603,8 +1964,8 @@ export default function AdminDashboard() {
         </div>
 
         <div class="footer-info">
-          <p style="font-size: 9px; font-weight: bold; color: #111; margin: 0;">Thank you for shopping with Trendy Cart BD!</p>
-          <p style="font-size: 8px; color: #999; margin: 1px 0 0 0;">This is a computer-generated document. No signature is required.</p>
+          <p style="font-size: 9px; font-weight: bold; color: #111; margin: 0;">সিস্টেম জেনারেটেড ভাউচার • System Generated Voucher</p>
+          <p style="font-size: 8px; color: #777; margin: 1px 0 0 0;">Thank you for shopping with Trendy Cart BD! No signature is required.</p>
         </div>
       </div>
     `;
@@ -1622,7 +1983,7 @@ export default function AdminDashboard() {
 
         <div class="info-bar">
           <div>
-            <p style="margin: 2px 0; font-size: 9px;"><strong>Order ID:</strong> #${order.id}</p>
+            <p style="margin: 2px 0; font-size: 9px;"><strong>Order ID:</strong> #${formattedOrderId}</p>
             <p style="margin: 2px 0; font-size: 8px; color: #555;"><strong>Invoice Date:</strong> ${new Date(order.date).toLocaleString()}</p>
           </div>
           <div style="font-size: 9px; text-transform: uppercase; font-weight: bold; color: #888;">Office Copy / অফিস কপি</div>
@@ -1648,7 +2009,7 @@ export default function AdminDashboard() {
             <p><strong>Phone:</strong> ${order.customer.phone}</p>
             <p><strong>Email:</strong> ${order.customer.email || 'N/A'}</p>
             <p><strong>District:</strong> ${order.customer.district || 'N/A'}</p>
-            <p><strong>Address:</strong> ${order.customer.address}</p>
+            <p style="word-break: break-word; overflow-wrap: anywhere; line-height: 1.45;"><strong>Address:</strong> ${formattedAddress}</p>
           </div>
           
           <div class="totals">
@@ -1674,8 +2035,8 @@ export default function AdminDashboard() {
         </div>
 
         <div class="footer-info">
-          <p style="font-size: 9px; font-weight: bold; color: #111; margin: 0;">Thank you for shopping with Trendy Cart BD!</p>
-          <p style="font-size: 8px; color: #999; margin: 1px 0 0 0;">This is a computer-generated document. No signature is required.</p>
+          <p style="font-size: 9px; font-weight: bold; color: #111; margin: 0;">সিস্টেম জেনারেটেড ভাউচার • System Generated Voucher</p>
+          <p style="font-size: 8px; color: #777; margin: 1px 0 0 0;">Thank you for shopping with Trendy Cart BD! No signature is required.</p>
         </div>
       </div>
     `;
@@ -1693,11 +2054,11 @@ export default function AdminDashboard() {
         doc.write(`
       <html>
         <head>
-          <title>Invoice - Order #${order.id}</title>
+          <title>Invoice - Order #${formattedOrderId}</title>
           <style>
             body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; margin: 0; padding: 0; color: #222; background-color: #fff; }
             .print-container { width: 210mm; height: 297mm; margin: auto; padding: 4mm 8mm; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
-            .invoice-box { width: 194mm; height: 133mm; padding: 10px; border: 1px solid #eaeaea; font-size: 10px; line-height: 1.35; border-radius: 6px; box-sizing: border-box; background: #fff; display: flex; flex-direction: column; justify-content: space-between; }
+            .invoice-box { width: 194mm; min-height: 133mm; padding: 10px; border: 1px solid #eaeaea; font-size: 10px; line-height: 1.4; border-radius: 6px; box-sizing: border-box; background: #fff; display: flex; flex-direction: column; justify-content: space-between; }
             .header-table { width: 100%; border-collapse: collapse; margin-bottom: 4px; border-bottom: 2px solid #111; padding-bottom: 2px; }
             .company { font-size: 18px; font-weight: 950; letter-spacing: -1px; text-transform: uppercase; margin: 0; color: #000; }
             .label { font-size: 12px; color: #666; font-weight: bold; text-align: right; text-transform: uppercase; letter-spacing: 1px; }
@@ -1708,10 +2069,10 @@ export default function AdminDashboard() {
             table.items th { padding: 4px 6px; font-size: 9px; text-transform: uppercase; text-align: left; background-color: #f7f7f7; color: #444; font-weight: bold; border-top: 1px solid #eaeaea; border-bottom: 1px solid #eaeaea; }
             table.items td { padding: 3px 6px; border-bottom: 1px solid #eaeaea; font-size: 9px; }
             
-            .flex-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; }
-            .card { background: #fafafa; padding: 6px; border-radius: 4px; border: 1px solid #eee; flex: 1.2; min-width: 0; }
-            .card h3 { margin: 0 0 2px 0; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; border-bottom: 1px solid #eaeaea; padding-bottom: 2px; }
-            .card p { margin: 1px 0; font-size: 9px; color: #333; }
+            .flex-row { display: flex; gap: 12px; justify-content: space-between; align-items: flex-start; margin: 4px 0; }
+            .card { background: #fafafa; padding: 7px 8px; border-radius: 4px; border: 1px solid #eee; flex: 1.25; min-width: 0; word-break: break-word; overflow-wrap: anywhere; }
+            .card h3 { margin: 0 0 3px 0; font-size: 9px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; border-bottom: 1px solid #eaeaea; padding-bottom: 2px; }
+            .card p { margin: 2px 0; font-size: 9px; color: #333; line-height: 1.45; word-break: break-word; overflow-wrap: anywhere; }
             
             .totals { width: 180px; font-size: 9px; flex: 0.8; }
             .total-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
@@ -1895,6 +2256,7 @@ export default function AdminDashboard() {
     isCollection: false, 
     sizeChartImage: '', 
     category: 'Basic', 
+    subCategory: '',
     code: '', 
     images: [] as string[], 
     imageVariants: [] as ProductImageVariant[],
@@ -2093,23 +2455,31 @@ export default function AdminDashboard() {
       ? Number(dbProduct.sizePrices[productToAddSize])
       : dbProduct.price;
       
-    // Determine if the product is already in the order items with the exact same size
+    const matchedVariantCode = productSearchQuery.trim()
+      ? (dbProduct.imageVariants?.find(v => v.code && v.code.toLowerCase().includes(productSearchQuery.toLowerCase().trim()))?.code ||
+         dbProduct.variantCodes?.find(vc => vc.toLowerCase().includes(productSearchQuery.toLowerCase().trim())) ||
+         dbProduct.code || '')
+      : (dbProduct.code || '');
+
+    // Determine if the product is already in the order items with the exact same size and code
     const existingIndex = editingOrderState.items.findIndex(
-      item => item.id === dbProduct.id && item.selectedSize === productToAddSize
+      item => item.id === dbProduct.id && item.selectedSize === productToAddSize && (item.code || '') === matchedVariantCode
     );
     
     let updatedItems = [...editingOrderState.items];
     if (existingIndex > -1) {
       updatedItems[existingIndex].quantity += productToAddQty;
     } else {
-      const newItem = {
+      const matchedVariantImg = dbProduct.imageVariants?.find(v => v.code === matchedVariantCode)?.image;
+      const newItem: CartItem = {
+        ...dbProduct,
         id: dbProduct.id,
         name: dbProduct.name,
         price: itemPrice,
         quantity: productToAddQty,
-        image: dbProduct.images?.[0] || dbProduct.image || '',
+        image: matchedVariantImg || dbProduct.images?.[0] || dbProduct.image || '',
         selectedSize: productToAddSize,
-        code: dbProduct.code || ''
+        code: matchedVariantCode
       };
       updatedItems.push(newItem);
     }
@@ -2177,8 +2547,9 @@ export default function AdminDashboard() {
   const [adsSubTab, setAdsSubTab] = useState<'popup' | 'home'>('home');
 
   const [adminCategoryFilter, setAdminCategoryFilter] = useState('all');
+  const [adminSubCategoryFilter, setAdminSubCategoryFilter] = useState('all');
   const [adminHotSaleFilter, setAdminHotSaleFilter] = useState('all');
-  const [adminSortBy, setAdminSortBy] = useState('newest');
+  const [adminSortBy, setAdminSortBy] = useState('serial');
 
   const adminCategories = React.useMemo(() => {
     const fromProducts = new Set(products.map(p => p.category));
@@ -2187,36 +2558,116 @@ export default function AdminDashboard() {
     return ['all', ...Array.from(combined)].filter(Boolean);
   }, [products, categories]);
 
+  const adminSubCategories = React.useMemo(() => {
+    if (adminCategoryFilter === 'all') return [];
+    const catObj = categories.find(c => c.name === adminCategoryFilter);
+    const fromCat = catObj?.subCategories || [];
+    const fromProds = products
+      .filter(p => p.category === adminCategoryFilter && p.subCategory)
+      .map(p => p.subCategory as string);
+    return Array.from(new Set([...fromCat, ...fromProds])).filter(Boolean);
+  }, [adminCategoryFilter, categories, products]);
+
+  const getSubCategoriesFor = React.useCallback((catName: string) => {
+    if (!catName || catName === 'all') return [];
+    const catObj = categories.find(c => c.name === catName);
+    const fromCat = catObj?.subCategories || [];
+    const fromProds = products
+      .filter(p => p.category === catName && p.subCategory)
+      .map(p => p.subCategory as string);
+    return Array.from(new Set([...fromCat, ...fromProds])).filter(Boolean);
+  }, [categories, products]);
+
+  const getSerialRank = React.useCallback((p: Product) => {
+    return typeof p.serial === 'number' && p.serial > 0 ? p.serial : 999999;
+  }, []);
+
   const filteredAdminProducts = React.useMemo(() => {
+    const q = adminSearchQuery.toLowerCase().trim();
     return products
       .filter(p => {
-        const matchesSearch = 
-          p.name.toLowerCase().includes(adminSearchQuery.toLowerCase()) ||
-          (p.code && p.code.toLowerCase().includes(adminSearchQuery.toLowerCase())) ||
-          (p.category && p.category.toLowerCase().includes(adminSearchQuery.toLowerCase())) ||
-          p.id.toLowerCase().includes(adminSearchQuery.toLowerCase());
+        const matchesSearch = !q ||
+          p.name.toLowerCase().includes(q) ||
+          (p.code && p.code.toLowerCase().includes(q)) ||
+          (p.variantCodes && p.variantCodes.some(vc => vc.toLowerCase().includes(q))) ||
+          (p.imageVariants && p.imageVariants.some(v => (v.code && v.code.toLowerCase().includes(q)) || (v.title && v.title.toLowerCase().includes(q)))) ||
+          (p.category && p.category.toLowerCase().includes(q)) ||
+          (p.subCategory && p.subCategory.toLowerCase().includes(q)) ||
+          p.id.toLowerCase().includes(q);
         
         const matchesCategory = adminCategoryFilter === 'all' || p.category === adminCategoryFilter;
+        const matchesSubCategory = adminSubCategoryFilter === 'all' || p.subCategory === adminSubCategoryFilter;
         
         const matchesHotSale = 
           adminHotSaleFilter === 'all' ||
           (adminHotSaleFilter === 'yes' && p.isHotSale) ||
           (adminHotSaleFilter === 'no' && !p.isHotSale);
 
-        return matchesSearch && matchesCategory && matchesHotSale;
+        return matchesSearch && matchesCategory && matchesSubCategory && matchesHotSale;
       })
       .sort((a, b) => {
         if (adminSortBy === 'price-asc') return a.price - b.price;
         if (adminSortBy === 'price-desc') return b.price - a.price;
-        return (a.serial || 0) - (b.serial || 0);
+        return getSerialRank(a) - getSerialRank(b);
       });
-  }, [products, adminSearchQuery, adminCategoryFilter, adminHotSaleFilter, adminSortBy]);
+  }, [products, adminSearchQuery, adminCategoryFilter, adminSubCategoryFilter, adminHotSaleFilter, adminSortBy, getSerialRank]);
 
   const filteredCollectionProducts = React.useMemo(() => {
     return products
       .filter(p => p.isCollection)
-      .sort((a, b) => (a.serial || 0) - (b.serial || 0));
-  }, [products]);
+      .sort((a, b) => getSerialRank(a) - getSerialRank(b));
+  }, [products, getSerialRank]);
+
+  const handleMoveProductSerial = (productId: string, direction: 'up' | 'down', currentList: Product[]) => {
+    const idx = currentList.findIndex(p => p.id === productId);
+    if (idx === -1) return;
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= currentList.length) return;
+
+    const reordered = [...currentList];
+    const [moved] = reordered.splice(idx, 1);
+    reordered.splice(targetIdx, 0, moved);
+
+    const updates = reordered.map((item, i) => ({
+      id: item.id,
+      serial: i + 1
+    }));
+    updateProductSerials(updates);
+  };
+
+  const handleSetProductSerialPosition = (productId: string, newSerialVal: number, currentList: Product[]) => {
+    const targetSerial = Math.max(1, Math.floor(Number(newSerialVal) || 1));
+    const currentIdx = currentList.findIndex(p => p.id === productId);
+    if (currentIdx === -1) {
+      updateProductSerials([{ id: productId, serial: targetSerial }]);
+      return;
+    }
+    const reordered = [...currentList];
+    const [moved] = reordered.splice(currentIdx, 1);
+    const insertIdx = Math.min(reordered.length, Math.max(0, targetSerial - 1));
+    reordered.splice(insertIdx, 0, moved);
+    const updates = reordered.map((item, i) => ({
+      id: item.id,
+      serial: i + 1
+    }));
+    updateProductSerials(updates);
+  };
+
+  const handleNormalizeProductSerials = (currentList: Product[]) => {
+    if (currentList.length === 0) return;
+    const updates = currentList.map((item, i) => ({
+      id: item.id,
+      serial: i + 1
+    }));
+    updateProductSerials(updates);
+    Swal.fire({
+      icon: 'success',
+      title: 'সিরিয়াল আপডেট হয়েছে!',
+      text: `১ থেকে ${currentList.length} পর্যন্ত প্রোডাক্টগুলো সিরিয়ালি সাজানো হয়েছে।`,
+      timer: 1500,
+      showConfirmButton: false
+    });
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -2351,7 +2802,7 @@ export default function AdminDashboard() {
                       if (!forgotEmail) { Swal.fire('Error', 'Please enter email', 'error'); return; }
                       setIsForgotLoading(true);
                       try {
-                        const res = await fetch('/api/auth/forgot-password', {
+                        const res = await fetch(apiUrl('/api/auth/forgot-password'), {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ email: forgotEmail })
@@ -2424,7 +2875,7 @@ export default function AdminDashboard() {
                       if (newForgotPassword.length < 6) { Swal.fire('Error', 'Password must be at least 6 characters', 'error'); return; }
                       setIsForgotLoading(true);
                       try {
-                        const res = await fetch('/api/auth/reset-password', {
+                        const res = await fetch(apiUrl('/api/auth/reset-password'), {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({ email: forgotEmail, otp: forgotOTP, newPassword: newForgotPassword })
@@ -2465,6 +2916,81 @@ export default function AdminDashboard() {
     );
   }
 
+  // Helper to get next default base product code
+  const getNextBaseProductCode = (excludeId?: string) => {
+    const tyCodes = products
+      .filter(p => !excludeId || p.id !== excludeId)
+      .map(p => p.code || '')
+      .filter(c => c.startsWith('TY-'))
+      .map(c => parseInt(c.split('-')[1]))
+      .filter(n => !isNaN(n));
+    const maxNum = tyCodes.length > 0 ? Math.max(...tyCodes) : 1000;
+    return `TY-${maxNum + 1}`;
+  };
+
+  // Sync variant codes with the first/main product code
+  const syncVariantsWithBaseCode = (
+    variants: ProductImageVariant[],
+    baseCodeInput?: string,
+    prevBaseCode?: string,
+    forceAll = false,
+    excludeId?: string
+  ): ProductImageVariant[] => {
+    const rawBase = (baseCodeInput || '').trim().toUpperCase() ||
+      (variants[0]?.code ? variants[0].code.trim().toUpperCase().replace(/-\d+$/, '') : '') ||
+      getNextBaseProductCode(excludeId);
+    const cleanPrevBase = (prevBaseCode || '').trim().toUpperCase();
+
+    return variants.map((v, idx) => {
+      const existingCode = (v.code || '').trim().toUpperCase();
+      const autoForPrev = cleanPrevBase ? `${cleanPrevBase}-${idx + 1}` : '';
+      const isAutoOrEmpty = !existingCode || existingCode === autoForPrev || /^TY-\d+-\d+$/.test(existingCode);
+      if (forceAll || isAutoOrEmpty) {
+        return { ...v, code: `${rawBase}-${idx + 1}` };
+      }
+      return { ...v, code: existingCode };
+    });
+  };
+
+  const autoGenerateNewProductVariantCodes = () => {
+    const base = (newProduct.code || '').trim().toUpperCase() ||
+      (newProduct.imageVariants?.[0]?.code?.trim().toUpperCase().replace(/-\d+$/, '')) ||
+      getNextBaseProductCode();
+    const updated = syncVariantsWithBaseCode(newProduct.imageVariants || [], base, newProduct.code, true);
+    setNewProduct(prev => ({
+      ...prev,
+      code: prev.code?.trim() ? prev.code.trim().toUpperCase() : base,
+      imageVariants: updated
+    }));
+    Swal.fire({
+      icon: 'success',
+      title: 'অটো কোড সেট হয়েছে!',
+      text: `প্রথম কোড (${base}) অনুযায়ী সকল ছবির ভেরিয়েন্ট কোড সেট করা হয়েছে।`,
+      timer: 1400,
+      showConfirmButton: false
+    });
+  };
+
+  const autoGenerateEditProductVariantCodes = () => {
+    if (!editingProduct) return;
+    const base = (editingProduct.code || '').trim().toUpperCase() ||
+      (editingProduct.imageVariants?.[0]?.code?.trim().toUpperCase().replace(/-\d+$/, '')) ||
+      getNextBaseProductCode(editingProduct.id);
+    const updated = syncVariantsWithBaseCode(editingProduct.imageVariants || [], base, editingProduct.code, true, editingProduct.id);
+    setEditingProduct({
+      ...editingProduct,
+      code: editingProduct.code?.trim() ? editingProduct.code.trim().toUpperCase() : base,
+      imageVariants: updated
+    });
+    Swal.fire({
+      icon: 'success',
+      title: 'অটো কোড সেট হয়েছে!',
+      text: `প্রথম কোড (${base}) অনুযায়ী সকল ছবির ভেরিয়েন্ট কোড সেট করা হয়েছে।`,
+      timer: 1400,
+      showConfirmButton: false
+    });
+  };
+
   // Helper handlers for newProduct front image & variant inventory
   const handleSetFrontImageForNewProduct = (url: string) => {
     if (!url) return;
@@ -2493,6 +3019,8 @@ export default function AdminDashboard() {
       reorderedVariants = [newPrimaryVariant, ...currentVariants];
     }
 
+    reorderedVariants = syncVariantsWithBaseCode(reorderedVariants, newProduct.code, newProduct.code, false);
+
     const aggregated: Record<string, number> = {};
     let totalStock = 0;
     reorderedVariants.forEach(v => {
@@ -2513,7 +3041,7 @@ export default function AdminDashboard() {
   };
 
   const handleRemoveFrontImageForNewProduct = () => {
-    const updatedVariants = (newProduct.imageVariants || []).slice(1);
+    const updatedVariants = syncVariantsWithBaseCode((newProduct.imageVariants || []).slice(1), newProduct.code, newProduct.code, false);
     const nextPrimary = updatedVariants[0]?.image || '';
     const aggregated: Record<string, number> = {};
     let totalStock = 0;
@@ -2544,7 +3072,7 @@ export default function AdminDashboard() {
       sizeStocks: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
       stock: 0
     }));
-    const updatedVariants = [...currentVariants, ...newVariants];
+    const updatedVariants = syncVariantsWithBaseCode([...currentVariants, ...newVariants], newProduct.code, newProduct.code, false);
     const totalStock = updatedVariants.reduce<number>((sum: number, v) => sum + (v.stock || 0), 0);
     const primaryImg = newProduct.image || updatedVariants[0]?.image || '';
     const secondaryImgs = updatedVariants.filter(v => v.image !== primaryImg).map(v => v.image);
@@ -2594,7 +3122,12 @@ export default function AdminDashboard() {
   };
 
   const removeNewProductVariant = (variantId: string) => {
-    const updatedVariants = (newProduct.imageVariants || []).filter(v => v.id !== variantId);
+    const updatedVariants = syncVariantsWithBaseCode(
+      (newProduct.imageVariants || []).filter(v => v.id !== variantId),
+      newProduct.code,
+      newProduct.code,
+      false
+    );
     const primaryImg = updatedVariants[0]?.image || '';
     const secondaryImgs = updatedVariants.slice(1).map(v => v.image);
     const aggregated: Record<string, number> = {};
@@ -2620,7 +3153,7 @@ export default function AdminDashboard() {
     const target = (newProduct.imageVariants || []).find(v => v.id === variantId);
     if (!target) return;
     const remaining = (newProduct.imageVariants || []).filter(v => v.id !== variantId);
-    const reordered = [target, ...remaining];
+    const reordered = syncVariantsWithBaseCode([target, ...remaining], newProduct.code, newProduct.code, false);
     setNewProduct(prev => ({
       ...prev,
       image: target.image,
@@ -2688,6 +3221,8 @@ export default function AdminDashboard() {
       reorderedVariants = [newPrimaryVariant, ...currentVariants];
     }
 
+    reorderedVariants = syncVariantsWithBaseCode(reorderedVariants, editingProduct.code, editingProduct.code, false, editingProduct.id);
+
     const aggregated: Record<string, number> = {};
     let totalStock = 0;
     reorderedVariants.forEach(v => {
@@ -2709,7 +3244,13 @@ export default function AdminDashboard() {
 
   const handleRemoveFrontImageForEditProduct = () => {
     if (!editingProduct) return;
-    const updatedVariants = (editingProduct.imageVariants || []).slice(1);
+    const updatedVariants = syncVariantsWithBaseCode(
+      (editingProduct.imageVariants || []).slice(1),
+      editingProduct.code,
+      editingProduct.code,
+      false,
+      editingProduct.id
+    );
     const nextPrimary = updatedVariants[0]?.image || '';
     const aggregated: Record<string, number> = {};
     let totalStock = 0;
@@ -2740,7 +3281,13 @@ export default function AdminDashboard() {
       sizeStocks: { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 },
       stock: 0
     }));
-    const updatedVariants = [...currentVariants, ...newVariants];
+    const updatedVariants = syncVariantsWithBaseCode(
+      [...currentVariants, ...newVariants],
+      editingProduct.code,
+      editingProduct.code,
+      false,
+      editingProduct.id
+    );
     const totalStock = updatedVariants.reduce<number>((sum: number, v) => sum + (v.stock || 0), 0);
     const primaryImg = editingProduct.image || updatedVariants[0]?.image || '';
     const secondaryImgs = updatedVariants.filter(v => v.image !== primaryImg).map(v => v.image);
@@ -2792,7 +3339,13 @@ export default function AdminDashboard() {
 
   const removeEditProductVariant = (variantId: string) => {
     if (!editingProduct) return;
-    const updatedVariants = (editingProduct.imageVariants || []).filter(v => v.id !== variantId);
+    const updatedVariants = syncVariantsWithBaseCode(
+      (editingProduct.imageVariants || []).filter(v => v.id !== variantId),
+      editingProduct.code,
+      editingProduct.code,
+      false,
+      editingProduct.id
+    );
     const primaryImg = updatedVariants[0]?.image || '';
     const secondaryImgs = updatedVariants.slice(1).map(v => v.image);
     const aggregated: Record<string, number> = {};
@@ -2819,7 +3372,7 @@ export default function AdminDashboard() {
     const target = (editingProduct.imageVariants || []).find(v => v.id === variantId);
     if (!target) return;
     const remaining = (editingProduct.imageVariants || []).filter(v => v.id !== variantId);
-    const reordered = [target, ...remaining];
+    const reordered = syncVariantsWithBaseCode([target, ...remaining], editingProduct.code, editingProduct.code, false, editingProduct.id);
     setEditingProduct({
       ...editingProduct,
       image: target.image,
@@ -2862,6 +3415,7 @@ export default function AdminDashboard() {
 
   const openEditProductModal = (p: Product) => {
     const buildVariants = (prod: Product) => {
+      const baseCode = (prod.code || '').trim().toUpperCase() || getNextBaseProductCode(prod.id);
       let variants = prod.imageVariants ? [...prod.imageVariants] : [];
       if (variants.length === 0) {
         const allImgs = Array.from(new Set([prod.image, ...(prod.images || [])].filter(Boolean)));
@@ -2870,10 +3424,16 @@ export default function AdminDashboard() {
             id: `var-edit-${Date.now()}-${idx}`,
             image: img,
             title: `Variant ${idx + 1}`,
+            code: prod.variantCodes?.[idx] || `${baseCode}-${idx + 1}`,
             sizeStocks: { ...(prod.sizeStocks || { S: 0, M: 0, L: 0, XL: 0, XXL: 0, '3XL': 0 }) },
             stock: Object.values(prod.sizeStocks || {}).reduce((s, c) => s + (Number(c) || 0), 0) || prod.stock || 0
           }));
         }
+      } else {
+        variants = variants.map((v, idx) => ({
+          ...v,
+          code: v.code?.trim() || prod.variantCodes?.[idx] || `${baseCode}-${idx + 1}`
+        }));
       }
       return variants;
     };
@@ -2888,7 +3448,7 @@ export default function AdminDashboard() {
 
     // Hydrate full gallery & variants on-demand from server
     if (!p.imageVariants || p.imageVariants.length === 0) {
-      fetch(`/api/admin/products/${p.id}`)
+      fetch(apiUrl(`/api/admin/products/${p.id}`))
         .then(res => res.ok ? res.json() : null)
         .then((fullProd: Product | null) => {
           if (fullProd && fullProd.id === p.id) {
@@ -2968,6 +3528,7 @@ export default function AdminDashboard() {
       isCollection: newProduct.isCollection,
       sizeChartImage: newProduct.sizeChartImage,
       category: newProduct.category || 'Basic',
+      subCategory: newProduct.subCategory || '',
       code: newProduct.code,
       images: additionalImages,
       imageVariants: finalImageVariants,
@@ -2988,6 +3549,7 @@ export default function AdminDashboard() {
       isCollection: false, 
       sizeChartImage: '', 
       category: 'Basic', 
+      subCategory: '',
       code: '', 
       images: [], 
       imageVariants: [],
@@ -3114,7 +3676,7 @@ export default function AdminDashboard() {
       const { actualShipping, actualTotalPayable } = getOrderTotals(order);
 
       return order.items.map((item: any) => ({
-        'Order ID': order.id,
+        'Order ID': formatOrderId(order.id),
         'Date': formatDate(order.date),
         'Customer Name': order.customer?.name || 'N/A',
         'Phone': order.customer?.phone || 'N/A',
@@ -3237,7 +3799,7 @@ export default function AdminDashboard() {
       });
 
       try {
-        const response = await fetch('/api/send-newsletter', {
+        const response = await fetch(apiUrl('/api/send-newsletter'), {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json'
@@ -3851,7 +4413,7 @@ export default function AdminDashboard() {
                                   >
                                     <div className="flex-1 min-w-0">
                                       <div className="flex items-center gap-2">
-                                        <span className="font-mono font-black text-xs text-gray-900 dark:text-white">#{order.id}</span>
+                                        <span className="font-mono font-black text-xs text-gray-900 dark:text-white">#{formatOrderId(order.id)}</span>
                                         {isUnread && (
                                           <span className="inline-block w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />
                                         )}
@@ -4025,27 +4587,24 @@ export default function AdminDashboard() {
                         <span className="w-2 h-2 bg-green-600 rounded-full animate-ping" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-green-700">Database Connected</span>
                       </div>
-                    ) : (
-                            <>
-                              {/* <div className="px-4 py-2 bg-rose-50 rounded-xl border border-rose-100 flex items-center gap-2" title="Data stored in local file fallback DB">
+                    ) : dbStatus ? (
+                      <div className="px-4 py-2 bg-rose-50 rounded-xl border border-rose-100 flex items-center gap-2" title="Data stored in local file fallback DB">
                         <span className="w-2 h-2 bg-rose-600 rounded-full" />
                         <span className="text-[10px] font-black uppercase tracking-widest text-rose-700">⚠️ Database Not Connected</span>
-                              </div> */}
-                            </>
-                    )}
+                      </div>
+                    ) : null}
                   </div>
 
-                  {/* MongoDB Diagnostics Widget when not connected
-                  {!dbStatus?.connected && (
+                  {dbStatus && !dbStatus.connected && (
                     <div className="mt-2 text-left bg-rose-50/50 border border-rose-100 p-5 rounded-2xl max-w-2xl">
                       <h4 className="text-xs font-black uppercase tracking-widest text-rose-800 flex items-center gap-2">
                         <span>⚠️ MongoDB কানেকশন সমস্যা ও সমাধান গাইড</span>
                       </h4>
                       <p className="mt-1 text-xs text-rose-600 font-medium">
-                        আপনার কানেকশন স্ট্রিংটি সেটআপ করা হয়েছে কিন্তু ক্লাউড ডাটাবেজ কানেক্ট করা যায়নি। নিচের বিষয়গুলো চেক করুন:
+                        ক্লাউড ডাটাবেজ কানেক্ট করা যায়নি। নিচের বিষয়গুলো চেক করুন:
                       </p>
                       
-                      {dbStatus?.error && (
+                      {dbStatus.error && (
                         <div className="mt-3 bg-white/80 border border-rose-100 p-3 rounded-xl font-mono text-[10px] text-rose-700 overflow-x-auto whitespace-pre-wrap">
                           <strong>Error details:</strong> {dbStatus.error}
                         </div>
@@ -4053,17 +4612,14 @@ export default function AdminDashboard() {
 
                       <ul className="mt-3 space-y-2 text-xs text-gray-600 list-disc list-inside">
                         <li>
-                          <strong className="text-gray-900">Network IP Access (খুবই গুরুত্বপূর্ণ):</strong> MongoDB Atlas ড্যাশবোর্ডে যান, বাম পাশের মেনু থেকে <span className="bg-gray-100 px-1 py-0.5 rounded font-mono font-bold">Network Access</span> এ ক্লিক করুন। এরপর <span className="font-bold">Add IP Address</span> এ চাপ দিয়ে <span className="text-rose-700 font-black">Allow Access From Anywhere (0.0.0.0/0)</span> সিলেক্ট করে Confirm করুন। (অন্যথায় ক্লাউড রান সার্ভারটি ব্লক হয়ে থাকবে)।
+                          <strong className="text-gray-900">Network IP Access (Vercel-এর জন্য আবশ্যিক):</strong> MongoDB Atlas ড্যাশবোর্ডে যান, বাম পাশের মেনু থেকে <span className="bg-gray-100 px-1 py-0.5 rounded font-mono font-bold">Network Access</span> এ ক্লিক করুন। এরপর <span className="font-bold">Add IP Address</span> এ চাপ দিয়ে <span className="text-rose-700 font-black">Allow Access From Anywhere (0.0.0.0/0)</span> সিলেক্ট করে Confirm করুন। (Vercel ডায়নামিক IP ব্যবহার করে, তাই 0.0.0.0/0 ছাড়া Vercel থেকে MongoDB কানেক্ট হবে না)।
                         </li>
                         <li>
-                          <strong className="text-gray-900">পাসওয়ার্ড চেক করুন:</strong> কানেকশন স্ট্রিং এ পাসওয়ার্ড ঠিক আছে কিনা তা নিশ্চিত করুন (যেমন <span className="bg-gray-100 px-1 py-0.5 rounded font-mono">&lt;db_password&gt;</span> লেখাটি মুছে শুধু আপনার পাসওয়ার্ড যেমন <span className="bg-gray-100 px-1 py-0.5 rounded font-mono font-bold">rtyfghcvb</span> লিখুন)।
-                        </li>
-                        <li>
-                          <strong className="text-gray-900">ডাটা সিঙ্ক্রোনাইজেশন:</strong> কানেকশন সফল হলেই আপনার লোকাল ডাটার ফাইল থেকে সমস্ত প্রোডাক্ট ও অর্ডার ডাটাবেজে স্বয়ংক্রিয়ভাবে আপলোড (Auto Migrate) হয়ে যাবে!
+                          <strong className="text-gray-900">Environment Variable চেক করুন:</strong> Vercel Project Settings &rarr; Environment Variables এ গিয়ে <span className="bg-gray-100 px-1 py-0.5 rounded font-mono font-bold">MONGODB_URI</span> যুক্ত করে একবার Redeploy দিন।
                         </li>
                       </ul>
                     </div>
-                  )} */}
+                  )}
                 </div>
               </div>
             </div>
@@ -4470,14 +5026,14 @@ export default function AdminDashboard() {
                       <textarea required className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors h-24 resize-none placeholder:text-gray-300 custom-scrollbar" value={newProduct.description} onChange={e=>setNewProduct({...newProduct, description: e.target.value})} placeholder="Detailed description of the product, fabric, care instructions..." />
                     </div>
 
-                    {/* Category */}
+                    {/* Category & Sub-Category */}
                     <div>
                       <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">Category *</label>
                       <select 
                         required 
                         className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors appearance-none" 
                         value={newProduct.category} 
-                        onChange={e => setNewProduct({...newProduct, category: e.target.value})}
+                        onChange={e => setNewProduct({...newProduct, category: e.target.value, subCategory: ''})}
                       >
                         <option value="">-- Select Category --</option>
                         {categories.map(cat => (
@@ -4486,10 +5042,63 @@ export default function AdminDashboard() {
                       </select>
                     </div>
 
-                    {/* Product Code */}
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">SKU / Product Code</label>
-                      <input className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors placeholder:text-gray-300 font-mono font-bold" value={newProduct.code || ''} onChange={e=>setNewProduct({...newProduct, code: e.target.value})} placeholder="e.g. TC-204" />
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">Sub-Category (সাব-ক্যাটাগরি)</label>
+                      {(() => {
+                        const selectedCatObj = categories.find(c => c.name === newProduct.category);
+                        const subOpts = selectedCatObj?.subCategories || [];
+                        return subOpts.length > 0 ? (
+                          <select
+                            className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors appearance-none"
+                            value={newProduct.subCategory || ''}
+                            onChange={e => setNewProduct({ ...newProduct, subCategory: e.target.value })}
+                          >
+                            <option value="">-- Select Sub-Category (Optional) --</option>
+                            {subOpts.map(sub => (
+                              <option key={sub} value={sub}>{sub}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors placeholder:font-normal placeholder:text-gray-300"
+                            value={newProduct.subCategory || ''}
+                            onChange={e => setNewProduct({ ...newProduct, subCategory: e.target.value })}
+                            placeholder="Optional sub-category..."
+                          />
+                        );
+                      })()}
+                    </div>
+
+                    {/* Product Code & Serial Number */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">SKU / Main Product Code (প্রথম/মূল কোড)</label>
+                      <input
+                        className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors placeholder:text-gray-300 font-mono font-bold uppercase"
+                        value={newProduct.code || ''}
+                        onChange={e => {
+                          const nextCode = e.target.value;
+                          setNewProduct(prev => ({
+                            ...prev,
+                            code: nextCode,
+                            imageVariants: (prev.imageVariants && prev.imageVariants.length > 0)
+                              ? syncVariantsWithBaseCode(prev.imageVariants, nextCode, prev.code, false)
+                              : prev.imageVariants
+                          }));
+                        }}
+                        placeholder="e.g. TC-204 (খালি রাখলে অটো কোড হবে)"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">Serial Number (প্রোডাক্ট সিরিয়াল পজিশন)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors placeholder:text-gray-300 font-black"
+                        value={newProduct.serial || ''}
+                        onChange={e => setNewProduct({ ...newProduct, serial: Number(e.target.value) || 0 })}
+                        placeholder="e.g. 1, 2, 3..."
+                      />
                     </div>
 
                     {/* Type Selection */}
@@ -4670,7 +5279,16 @@ export default function AdminDashboard() {
                         </h4>
                         <p className="text-[11px] text-gray-500 font-medium mt-1">একসাথে বাকি ছবিগুলো আপলোড করুন। প্রতিটি ছবির নিচে সাইজ ও কোয়ান্টিটি আলাদা ভাবে ইনপুট দিন যার মাধ্যমে নির্ভুল ইনভেন্টরি ম্যানেজ হবে।</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(newProduct.imageVariants || []).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={autoGenerateNewProductVariantCodes}
+                            className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase px-3.5 py-1.5 rounded-xl shadow-xs transition-colors"
+                          >
+                            ⚡ অটো কোড সেট (প্রথম কোডের সাথে)
+                          </button>
+                        )}
                         <span className="bg-black text-white text-[10px] font-black uppercase px-3.5 py-1.5 rounded-xl shadow-xs">
                           Total Stock: {newProduct.stock || 0} pcs
                         </span>
@@ -4774,23 +5392,48 @@ export default function AdminDashboard() {
 
                             {/* Variant Info & Per-Image Sizes Matrix */}
                             <div className="flex-1 w-full flex flex-col gap-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2 flex-1">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-2 flex-1">
                                   <span className="font-bold text-xs uppercase tracking-wider text-gray-400">
                                     {idx === 0 ? '⭐ Front Variant:' : `Image #${idx + 1}:`}
                                   </span>
                                   <input 
                                     type="text" 
-                                    placeholder="Variant / Color Title (e.g. Black, Navy, Maroon...)" 
+                                    placeholder="Variant / Color Title (e.g. Black, Navy...)" 
                                     value={variant.title || ''} 
                                     onChange={e => {
                                       const updated = (newProduct.imageVariants || []).map(v => v.id === variant.id ? { ...v, title: e.target.value } : v);
                                       setNewProduct(prev => ({ ...prev, imageVariants: updated }));
                                     }} 
-                                    className="flex-1 max-w-sm text-xs font-bold bg-white border border-gray-200 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-1 focus:ring-black"
+                                    className="flex-1 min-w-[150px] text-xs font-bold bg-white border border-gray-200 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-1 focus:ring-black"
                                   />
+                                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-1.5 focus-within:border-black focus-within:ring-1 focus-within:ring-black">
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 whitespace-nowrap">Code:</span>
+                                    <input
+                                      type="text"
+                                      placeholder={`${(newProduct.code || getNextBaseProductCode()).toUpperCase()}-${idx + 1}`}
+                                      value={variant.code || ''}
+                                      onChange={e => {
+                                        const entered = e.target.value.toUpperCase();
+                                        let updated = (newProduct.imageVariants || []).map(v => v.id === variant.id ? { ...v, code: entered } : v);
+                                        if (idx === 0 && entered.trim()) {
+                                          const rootFromFirst = entered.trim().replace(/-\d+$/, '');
+                                          updated = updated.map((v, vIdx) => {
+                                            if (vIdx === 0) return v;
+                                            const prevRoot = (variant.code || newProduct.code || '').trim().toUpperCase().replace(/-\d+$/, '');
+                                            if (!v.code || (prevRoot && v.code.startsWith(prevRoot + '-'))) {
+                                              return { ...v, code: `${rootFromFirst}-${vIdx + 1}` };
+                                            }
+                                            return v;
+                                          });
+                                        }
+                                        setNewProduct(prev => ({ ...prev, imageVariants: updated }));
+                                      }}
+                                      className="w-28 text-xs font-mono font-black uppercase bg-transparent outline-none text-gray-900"
+                                    />
+                                  </div>
                                 </div>
-                                <div className="bg-white border border-gray-200 px-3.5 py-1.5 rounded-xl shadow-xs">
+                                <div className="bg-white border border-gray-200 px-3.5 py-1.5 rounded-xl shadow-xs self-start sm:self-auto">
                                   <span className="text-[10px] font-black uppercase text-gray-700">Variant Stock: <span className="text-black text-xs font-black">{variant.stock || 0} pcs</span></span>
                                 </div>
                               </div>
@@ -4920,14 +5563,14 @@ export default function AdminDashboard() {
                       <textarea required className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors h-24 resize-none placeholder:text-gray-300 custom-scrollbar" value={editingProduct.description} onChange={e=>setEditingProduct({...editingProduct, description: e.target.value})} />
                     </div>
 
-                    {/* Category */}
+                    {/* Category & Sub-Category */}
                     <div>
                       <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">Category *</label>
                       <select 
                         required 
                         className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors appearance-none" 
                         value={editingProduct.category || ''} 
-                        onChange={e => setEditingProduct({...editingProduct, category: e.target.value})}
+                        onChange={e => setEditingProduct({...editingProduct, category: e.target.value, subCategory: ''})}
                       >
                         <option value="">-- Select Category --</option>
                         {categories.map(cat => (
@@ -4936,10 +5579,62 @@ export default function AdminDashboard() {
                       </select>
                     </div>
 
-                    {/* Product Code */}
                     <div>
-                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">SKU / Product Code</label>
-                      <input className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors placeholder:text-gray-300 font-mono font-bold" value={editingProduct.code || ''} onChange={e=>setEditingProduct({...editingProduct, code: e.target.value})} />
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">Sub-Category (সাব-ক্যাটাগরি)</label>
+                      {(() => {
+                        const selectedCatObj = categories.find(c => c.name === editingProduct.category);
+                        const subOpts = selectedCatObj?.subCategories || [];
+                        return subOpts.length > 0 ? (
+                          <select
+                            className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors appearance-none"
+                            value={editingProduct.subCategory || ''}
+                            onChange={e => setEditingProduct({ ...editingProduct, subCategory: e.target.value })}
+                          >
+                            <option value="">-- Select Sub-Category (Optional) --</option>
+                            {subOpts.map(sub => (
+                              <option key={sub} value={sub}>{sub}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            type="text"
+                            className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm font-bold focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors placeholder:font-normal placeholder:text-gray-300"
+                            value={editingProduct.subCategory || ''}
+                            onChange={e => setEditingProduct({ ...editingProduct, subCategory: e.target.value })}
+                            placeholder="Optional sub-category..."
+                          />
+                        );
+                      })()}
+                    </div>
+
+                    {/* Product Code & Serial Number */}
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">SKU / Main Product Code (প্রথম/মূল কোড)</label>
+                      <input
+                        className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors placeholder:text-gray-300 font-mono font-bold uppercase"
+                        value={editingProduct.code || ''}
+                        onChange={e => {
+                          const nextCode = e.target.value;
+                          setEditingProduct({
+                            ...editingProduct,
+                            code: nextCode,
+                            imageVariants: (editingProduct.imageVariants && editingProduct.imageVariants.length > 0)
+                              ? syncVariantsWithBaseCode(editingProduct.imageVariants, nextCode, editingProduct.code, false, editingProduct.id)
+                              : editingProduct.imageVariants
+                          });
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2 ml-1">Serial Number (প্রোডাক্ট সিরিয়াল পজিশন)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        className="w-full border-2 border-gray-100 rounded-2xl p-4 text-sm focus:border-black focus:outline-none bg-gray-50 focus:bg-white transition-colors placeholder:text-gray-300 font-black"
+                        value={editingProduct.serial || ''}
+                        onChange={e => setEditingProduct({ ...editingProduct, serial: Number(e.target.value) || 0 })}
+                        placeholder="e.g. 1, 2, 3..."
+                      />
                     </div>
 
                     {/* Type Selection */}
@@ -5120,7 +5815,16 @@ export default function AdminDashboard() {
                         </h4>
                         <p className="text-[11px] text-gray-500 font-medium mt-1">একসাথে বাকি ছবিগুলো আপলোড করুন। প্রতিটি ছবির নিচে সাইজ ও কোয়ান্টিটি আলাদা ভাবে ইনপুট দিন যার মাধ্যমে নির্ভুল ইনভেন্টরি ম্যানেজ হবে।</p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {(editingProduct.imageVariants || []).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={autoGenerateEditProductVariantCodes}
+                            className="bg-amber-500 hover:bg-amber-600 text-white text-[10px] font-black uppercase px-3.5 py-1.5 rounded-xl shadow-xs transition-colors"
+                          >
+                            ⚡ অটো কোড সেট (প্রথম কোডের সাথে)
+                          </button>
+                        )}
                         <span className="bg-black text-white text-[10px] font-black uppercase px-3.5 py-1.5 rounded-xl shadow-xs">
                           Total Stock: {editingProduct.stock || 0} pcs
                         </span>
@@ -5224,23 +5928,48 @@ export default function AdminDashboard() {
 
                             {/* Variant Info & Per-Image Sizes Matrix */}
                             <div className="flex-1 w-full flex flex-col gap-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2 flex-1">
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <div className="flex flex-wrap items-center gap-2 flex-1">
                                   <span className="font-bold text-xs uppercase tracking-wider text-gray-400">
                                     {idx === 0 ? '⭐ Front Variant:' : `Image #${idx + 1}:`}
                                   </span>
                                   <input 
                                     type="text" 
-                                    placeholder="Variant / Color Title (e.g. Black, Navy, Maroon...)" 
+                                    placeholder="Variant / Color Title (e.g. Black, Navy...)" 
                                     value={variant.title || ''} 
                                     onChange={e => {
                                       const updated = (editingProduct.imageVariants || []).map(v => v.id === variant.id ? { ...v, title: e.target.value } : v);
                                       setEditingProduct({ ...editingProduct, imageVariants: updated });
                                     }} 
-                                    className="flex-1 max-w-sm text-xs font-bold bg-white border border-gray-200 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-1 focus:ring-black"
+                                    className="flex-1 min-w-[150px] text-xs font-bold bg-white border border-gray-200 rounded-xl px-3.5 py-2 focus:outline-none focus:ring-1 focus:ring-black"
                                   />
+                                  <div className="flex items-center gap-1.5 bg-white border border-gray-200 rounded-xl px-3 py-1.5 focus-within:border-black focus-within:ring-1 focus-within:ring-black">
+                                    <span className="text-[9px] font-black uppercase tracking-wider text-gray-400 whitespace-nowrap">Code:</span>
+                                    <input
+                                      type="text"
+                                      placeholder={`${(editingProduct.code || getNextBaseProductCode(editingProduct.id)).toUpperCase()}-${idx + 1}`}
+                                      value={variant.code || ''}
+                                      onChange={e => {
+                                        const entered = e.target.value.toUpperCase();
+                                        let updated = (editingProduct.imageVariants || []).map(v => v.id === variant.id ? { ...v, code: entered } : v);
+                                        if (idx === 0 && entered.trim()) {
+                                          const rootFromFirst = entered.trim().replace(/-\d+$/, '');
+                                          updated = updated.map((v, vIdx) => {
+                                            if (vIdx === 0) return v;
+                                            const prevRoot = (variant.code || editingProduct.code || '').trim().toUpperCase().replace(/-\d+$/, '');
+                                            if (!v.code || (prevRoot && v.code.startsWith(prevRoot + '-'))) {
+                                              return { ...v, code: `${rootFromFirst}-${vIdx + 1}` };
+                                            }
+                                            return v;
+                                          });
+                                        }
+                                        setEditingProduct({ ...editingProduct, imageVariants: updated });
+                                      }}
+                                      className="w-28 text-xs font-mono font-black uppercase bg-transparent outline-none text-gray-900"
+                                    />
+                                  </div>
                                 </div>
-                                <div className="bg-white border border-gray-200 px-3.5 py-1.5 rounded-xl shadow-xs">
+                                <div className="bg-white border border-gray-200 px-3.5 py-1.5 rounded-xl shadow-xs self-start sm:self-auto">
                                   <span className="text-[10px] font-black uppercase text-gray-700">Variant Stock: <span className="text-black text-xs font-black">{variant.stock || 0} pcs</span></span>
                                 </div>
                               </div>
@@ -5326,27 +6055,35 @@ export default function AdminDashboard() {
         {/* Product Management Tab */}
         {activeTab === 'shop' && (
           <div>
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-              <h1 className="text-2xl font-black uppercase">Product Management</h1>
-              <button 
-                onClick={() => { 
-                  if (!isAddingProduct) {
-                    const productsInShop = products.filter(p => !p.isCollection);
-                    const maxSerial = Math.max(...productsInShop.map(p => p.serial || 0), 0);
-                    setNewProduct({...newProduct, serial: maxSerial + 1, isCollection: false});
-                  }
-                  setIsAddingProduct(!isAddingProduct); 
-                  setEditingProduct(null); 
-                }}
-                className="bg-black text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 tracking-widest text-[10px] font-bold uppercase transition-colors"
-              >
-                {isAddingProduct ? 'Cancel' : <><Plus className="h-4 w-4"/> Add Product</>}
-              </button>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+              <div>
+                <h1 className="text-2xl font-black uppercase">Product Management</h1>
+                <p className="text-[11px] text-gray-400 font-bold mt-0.5">সিরিয়াল বাটন (▲/▼) অথবা নাম্বার বসিয়ে প্রোডাক্ট আগে-পরে সাজান</p>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleNormalizeProductSerials(filteredAdminProducts)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3.5 py-2 rounded-lg flex items-center gap-1.5 tracking-wider text-[10px] font-black uppercase transition-colors border border-gray-200"
+                >
+                  সিরিয়াল সাজান (1, 2, 3...)
+                </button>
+                <button 
+                  onClick={() => { 
+                    if (!isAddingProduct) {
+                      const productsInShop = products.filter(p => !p.isCollection);
+                      const maxSerial = Math.max(...productsInShop.map(p => p.serial || 0), 0);
+                      setNewProduct({...newProduct, serial: maxSerial + 1, isCollection: false});
+                    }
+                    setIsAddingProduct(!isAddingProduct); 
+                    setEditingProduct(null); 
+                  }}
+                  className="bg-black text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 tracking-widest text-[10px] font-bold uppercase transition-colors"
+                >
+                  {isAddingProduct ? 'Cancel' : <><Plus className="h-4 w-4"/> Add Product</>}
+                </button>
+              </div>
             </div>
-
-
-
-
 
             {/* Filters Dashboard Panel */}
             <div className="mb-6 grid grid-cols-1 md:grid-cols-4 gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100">
@@ -5357,7 +6094,7 @@ export default function AdminDashboard() {
                   type="text" 
                   value={adminSearchQuery} 
                   onChange={e => setAdminSearchQuery(e.target.value)} 
-                  placeholder="নাম, আইডি বা প্রোডাক্ট কোড..." 
+                  placeholder="নাম, আইডি বা যেকোনো ছবির কোড..." 
                   className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-colors"
                 />
               </div>
@@ -5365,17 +6102,34 @@ export default function AdminDashboard() {
               {/* Category dropdown */}
               <div className="flex flex-col gap-1.5">
                 <label className="text-[10px] font-black uppercase tracking-widest text-gray-400">Category (ক্যাটাগরি)</label>
-                <select 
-                  value={adminCategoryFilter} 
-                  onChange={e => setAdminCategoryFilter(e.target.value)} 
-                  className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-colors"
-                >
-                  {adminCategories.map(cat => (
-                    <option key={cat} value={cat}>
-                      {cat === 'all' ? 'All (সকল ক্যাটাগরি)' : cat}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex gap-2">
+                  <select 
+                    value={adminCategoryFilter} 
+                    onChange={e => {
+                      setAdminCategoryFilter(e.target.value);
+                      setAdminSubCategoryFilter('all');
+                    }} 
+                    className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-colors"
+                  >
+                    {adminCategories.map(cat => (
+                      <option key={cat} value={cat}>
+                        {cat === 'all' ? 'All (সকল ক্যাটাগরি)' : cat}
+                      </option>
+                    ))}
+                  </select>
+                  {adminCategoryFilter !== 'all' && adminSubCategories.length > 0 && (
+                    <select
+                      value={adminSubCategoryFilter}
+                      onChange={e => setAdminSubCategoryFilter(e.target.value)}
+                      className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-colors"
+                    >
+                      <option value="all">All Sub-Categories</option>
+                      {adminSubCategories.map(sub => (
+                        <option key={sub} value={sub}>{sub}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
               </div>
 
               {/* Hot Sale filter */}
@@ -5400,7 +6154,8 @@ export default function AdminDashboard() {
                   onChange={e => setAdminSortBy(e.target.value)} 
                   className="w-full text-xs border border-gray-200 rounded-xl px-3.5 py-2.5 bg-white focus:outline-none focus:ring-1 focus:ring-black focus:border-black transition-colors"
                 >
-                  <option value="newest">Newest First (নতুন প্রোডাক্ট আগে)</option>
+                  <option value="serial">Serial Order (সিরিয়াল অনুযায়ী ১, ২, ৩...)</option>
+                  <option value="newest">Default / Serial</option>
                   <option value="price-asc">Price: Low to High (মূল্য: কম থেকে বেশি)</option>
                   <option value="price-desc">Price: High to Low (মূল্য: বেশি থেকে কম)</option>
                 </select>
@@ -5411,8 +6166,8 @@ export default function AdminDashboard() {
               <table className="w-full text-left text-sm min-w-[800px] md:min-w-0">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Serial</th>
-                    <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Product</th>
+                    <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Serial (ক্রম)</th>
+                    <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Product & Codes</th>
                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Inventory</th>
                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Price</th>
                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Hot Sale</th>
@@ -5420,63 +6175,124 @@ export default function AdminDashboard() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredAdminProducts.map(p => (
-                    <tr key={p.id}>
-                      <td className="p-4">{p.serial || 0}</td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-4">
-                          {p.image && <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900">{p.name}</span>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.category} • {p.code}</span>
+                  {filteredAdminProducts.map((p, rowIdx) => {
+                    const variantCodeList = Array.from(new Set([
+                      ...(p.variantCodes || []),
+                      ...((p.imageVariants || []).map(v => v.code).filter(Boolean) as string[])
+                    ]));
+                    return (
+                      <tr key={p.id} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                type="button"
+                                disabled={rowIdx === 0}
+                                onClick={() => handleMoveProductSerial(p.id, 'up', filteredAdminProducts)}
+                                className="w-6 h-5 rounded bg-gray-100 hover:bg-black hover:text-white disabled:opacity-30 disabled:hover:bg-gray-100 disabled:hover:text-gray-500 text-gray-700 flex items-center justify-center text-[9px] font-black transition-colors"
+                                title="উপরে নিন (Move Up)"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                disabled={rowIdx === filteredAdminProducts.length - 1}
+                                onClick={() => handleMoveProductSerial(p.id, 'down', filteredAdminProducts)}
+                                className="w-6 h-5 rounded bg-gray-100 hover:bg-black hover:text-white disabled:opacity-30 disabled:hover:bg-gray-100 disabled:hover:text-gray-500 text-gray-700 flex items-center justify-center text-[9px] font-black transition-colors"
+                                title="নিচে নিন (Move Down)"
+                              >
+                                ▼
+                              </button>
+                            </div>
+                            <input
+                              type="number"
+                              min="1"
+                              key={`${p.id}-${p.serial || rowIdx + 1}`}
+                              defaultValue={p.serial && p.serial > 0 ? p.serial : rowIdx + 1}
+                              onBlur={e => {
+                                const val = Number(e.target.value);
+                                const currentDisplay = p.serial && p.serial > 0 ? p.serial : rowIdx + 1;
+                                if (val > 0 && val !== currentDisplay) {
+                                  handleSetProductSerialPosition(p.id, val, filteredAdminProducts);
+                                }
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              className="w-14 border border-gray-200 rounded-xl py-1.5 px-2 text-xs font-black text-center bg-white focus:border-black focus:ring-1 focus:ring-black focus:outline-none"
+                              title="সিরিয়াল নাম্বার পরিবর্তন করে Enter চাপুন"
+                            />
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="number" 
-                            readOnly
-                            disabled
-                            className={`w-16 border border-gray-100 rounded-lg p-1.5 text-xs font-black text-center cursor-not-allowed ${
-                              p.stock <= 0 
-                                ? 'bg-red-50 text-red-600 border-red-200' 
-                                : p.stock < 5 
-                                ? 'bg-amber-50 text-amber-650 border-amber-200' 
-                                : 'bg-gray-50 text-gray-900'
-                            }`}
-                            value={p.stock || 0}
-                          />
-                          {p.stock <= 0 ? (
-                            <span className="text-[8px] font-black uppercase text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100 whitespace-nowrap">Stock Out</span>
-                          ) : p.stock < 5 ? (
-                            <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 whitespace-nowrap animate-pulse">Low Stock</span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="p-4 font-black">৳{p.price}</td>
-                      <td className="p-4">{p.isHotSale ? <span className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold">YES</span> : '-'}</td>
-                      <td className="p-4 text-right">
-                        <button onClick={() => openEditProductModal(p)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg mr-2"><Edit className="h-5 w-5"/></button>
-                        <button onClick={async () => {
-                          const result = await Swal.fire({
-                            title: 'Are you sure?',
-                            text: "Delete this product from general list?",
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#000',
-                            cancelButtonColor: '#d33',
-                            confirmButtonText: 'Yes, delete it!'
-                          });
-                          if (result.isConfirmed) {
-                            deleteProduct(p.id);
-                            Swal.fire('Deleted!', 'Product has been deleted.', 'success');
-                          }
-                        }} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="h-5 w-5"/></button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredAdminProducts.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-gray-500">No products found holding those search/filter values.</td></tr>}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-4">
+                            {p.image && <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
+                            <div className="flex flex-col gap-1">
+                              <span className="font-bold text-gray-900">{p.name}</span>
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                {p.category}{p.subCategory ? ` › ${p.subCategory}` : ''} • <span className="text-black font-mono font-black">{p.code}</span>
+                              </span>
+                              {variantCodeList.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                  <span className="text-[8px] font-black uppercase text-gray-400">Image Codes:</span>
+                                  {variantCodeList.map((vc, vIdx) => (
+                                    <span key={vIdx} className="text-[9px] font-mono font-bold bg-gray-100 text-gray-700 border border-gray-200 px-1.5 py-0.5 rounded">
+                                      {vc}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="number" 
+                              readOnly
+                              disabled
+                              className={`w-16 border border-gray-100 rounded-lg p-1.5 text-xs font-black text-center cursor-not-allowed ${
+                                p.stock <= 0 
+                                  ? 'bg-red-50 text-red-600 border-red-200' 
+                                  : p.stock < 5 
+                                  ? 'bg-amber-50 text-amber-650 border-amber-200' 
+                                  : 'bg-gray-50 text-gray-900'
+                              }`}
+                              value={p.stock || 0}
+                            />
+                            {p.stock <= 0 ? (
+                              <span className="text-[8px] font-black uppercase text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100 whitespace-nowrap">Stock Out</span>
+                            ) : p.stock < 5 ? (
+                              <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 whitespace-nowrap animate-pulse">Low Stock</span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="p-4 font-black">৳{p.price}</td>
+                        <td className="p-4">{p.isHotSale ? <span className="bg-red-100 text-red-600 px-2 py-1 rounded text-xs font-bold">YES</span> : '-'}</td>
+                        <td className="p-4 text-right">
+                          <button onClick={() => openEditProductModal(p)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg mr-2"><Edit className="h-5 w-5"/></button>
+                          <button onClick={async () => {
+                            const result = await Swal.fire({
+                              title: 'Are you sure?',
+                              text: "Delete this product from general list?",
+                              icon: 'warning',
+                              showCancelButton: true,
+                              confirmButtonColor: '#000',
+                              cancelButtonColor: '#d33',
+                              confirmButtonText: 'Yes, delete it!'
+                            });
+                            if (result.isConfirmed) {
+                              deleteProduct(p.id);
+                              Swal.fire('Deleted!', 'Product has been deleted.', 'success');
+                            }
+                          }} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="h-5 w-5"/></button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredAdminProducts.length === 0 && <tr><td colSpan={6} className="p-6 text-center text-gray-500">No products found holding those search/filter values.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -5486,92 +6302,165 @@ export default function AdminDashboard() {
         {/* Collection Tab */}
         {activeTab === 'collection' && (
           <div>
-            <div className="flex justify-between items-center mb-6 border-b border-gray-100 pb-4">
-              <h1 className="text-2xl font-black uppercase">Collection</h1>
-              <button 
-                onClick={() => { 
-                  if (!isAddingProduct) {
-                    const collectionProducts = products.filter(p => p.isCollection);
-                    const maxSerial = Math.max(...collectionProducts.map(p => p.serial || 0), 0);
-                    setNewProduct({...newProduct, serial: maxSerial + 1, isCollection: true});
-                  }
-                  setIsAddingProduct(!isAddingProduct); 
-                  setEditingProduct(null); 
-                }}
-                className="bg-black text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 tracking-widest text-[10px] font-bold uppercase transition-colors"
-              >
-                {isAddingProduct ? 'Cancel' : <><Plus className="h-4 w-4"/> Add to Collection</>}
-              </button>
+            <div className="flex flex-wrap justify-between items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+              <div>
+                <h1 className="text-2xl font-black uppercase">Collection</h1>
+                <p className="text-[11px] text-gray-400 font-bold mt-0.5">সিরিয়াল বাটন (▲/▼) অথবা নাম্বার বসিয়ে কালেকশন প্রোডাক্ট সাজান</p>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleNormalizeProductSerials(filteredCollectionProducts)}
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-3.5 py-2 rounded-lg flex items-center gap-1.5 tracking-wider text-[10px] font-black uppercase transition-colors border border-gray-200"
+                >
+                  সিরিয়াল সাজান (1, 2, 3...)
+                </button>
+                <button 
+                  onClick={() => { 
+                    if (!isAddingProduct) {
+                      const collectionProducts = products.filter(p => p.isCollection);
+                      const maxSerial = Math.max(...collectionProducts.map(p => p.serial || 0), 0);
+                      setNewProduct({...newProduct, serial: maxSerial + 1, isCollection: true});
+                    }
+                    setIsAddingProduct(!isAddingProduct); 
+                    setEditingProduct(null); 
+                  }}
+                  className="bg-black text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-gray-800 tracking-widest text-[10px] font-bold uppercase transition-colors"
+                >
+                  {isAddingProduct ? 'Cancel' : <><Plus className="h-4 w-4"/> Add to Collection</>}
+                </button>
+              </div>
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden overflow-x-auto w-full">
               <table className="w-full text-left text-sm min-w-[800px] md:min-w-0">
                 <thead className="bg-gray-50 border-b border-gray-100">
                   <tr>
-                    <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Serial</th>
-                    <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Product</th>
+                    <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Serial (ক্রম)</th>
+                    <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Product & Codes</th>
                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Inventory</th>
                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest">Price</th>
                     <th className="p-4 font-bold uppercase text-[10px] text-gray-400 tracking-widest text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {filteredCollectionProducts.map(p => (
-                    <tr key={p.id}>
-                      <td className="p-4">{p.serial || 0}</td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-4">
-                          {p.image && <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
-                          <div className="flex flex-col">
-                            <span className="font-bold text-gray-900 font-sans tracking-tight">{p.name}</span>
-                            <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{p.category} • {p.code}</span>
+                  {filteredCollectionProducts.map((p, rowIdx) => {
+                    const variantCodeList = Array.from(new Set([
+                      ...(p.variantCodes || []),
+                      ...((p.imageVariants || []).map(v => v.code).filter(Boolean) as string[])
+                    ]));
+                    return (
+                      <tr key={p.id} className="hover:bg-gray-50/60 transition-colors">
+                        <td className="p-4">
+                          <div className="flex items-center gap-1.5">
+                            <div className="flex flex-col gap-0.5">
+                              <button
+                                type="button"
+                                disabled={rowIdx === 0}
+                                onClick={() => handleMoveProductSerial(p.id, 'up', filteredCollectionProducts)}
+                                className="w-6 h-5 rounded bg-gray-100 hover:bg-black hover:text-white disabled:opacity-30 disabled:hover:bg-gray-100 disabled:hover:text-gray-500 text-gray-700 flex items-center justify-center text-[9px] font-black transition-colors"
+                                title="উপরে নিন (Move Up)"
+                              >
+                                ▲
+                              </button>
+                              <button
+                                type="button"
+                                disabled={rowIdx === filteredCollectionProducts.length - 1}
+                                onClick={() => handleMoveProductSerial(p.id, 'down', filteredCollectionProducts)}
+                                className="w-6 h-5 rounded bg-gray-100 hover:bg-black hover:text-white disabled:opacity-30 disabled:hover:bg-gray-100 disabled:hover:text-gray-500 text-gray-700 flex items-center justify-center text-[9px] font-black transition-colors"
+                                title="নিচে নিন (Move Down)"
+                              >
+                                ▼
+                              </button>
+                            </div>
+                            <input
+                              type="number"
+                              min="1"
+                              key={`${p.id}-${p.serial || rowIdx + 1}`}
+                              defaultValue={p.serial && p.serial > 0 ? p.serial : rowIdx + 1}
+                              onBlur={e => {
+                                const val = Number(e.target.value);
+                                const currentDisplay = p.serial && p.serial > 0 ? p.serial : rowIdx + 1;
+                                if (val > 0 && val !== currentDisplay) {
+                                  handleSetProductSerialPosition(p.id, val, filteredCollectionProducts);
+                                }
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') {
+                                  e.currentTarget.blur();
+                                }
+                              }}
+                              className="w-14 border border-gray-200 rounded-xl py-1.5 px-2 text-xs font-black text-center bg-white focus:border-black focus:ring-1 focus:ring-black focus:outline-none"
+                              title="সিরিয়াল নাম্বার পরিবর্তন করে Enter চাপুন"
+                            />
                           </div>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center gap-2">
-                          <input 
-                            type="number" 
-                            readOnly
-                            disabled
-                            className={`w-16 border border-gray-100 rounded-lg p-1.5 text-xs font-black text-center cursor-not-allowed ${
-                              p.stock <= 0 
-                                ? 'bg-red-50 text-red-600 border-red-200' 
-                                : p.stock < 5 
-                                ? 'bg-amber-50 text-amber-600 border-amber-200' 
-                                : 'bg-gray-50 text-gray-900'
-                            }`}
-                            value={p.stock || 0}
-                          />
-                          {p.stock <= 0 ? (
-                            <span className="text-[8px] font-black uppercase text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100 whitespace-nowrap">Stock Out</span>
-                          ) : p.stock < 5 ? (
-                            <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 whitespace-nowrap animate-pulse">Low Stock</span>
-                          ) : null}
-                        </div>
-                      </td>
-                      <td className="p-4 font-black">৳{p.price}</td>
-                      <td className="p-4 text-right">
-                        <button onClick={() => openEditProductModal(p)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg mr-2"><Edit className="h-5 w-5"/></button>
-                        <button onClick={async () => {
-                          const result = await Swal.fire({
-                            title: 'Are you sure?',
-                            text: "Delete this product from collection?",
-                            icon: 'warning',
-                            showCancelButton: true,
-                            confirmButtonColor: '#000',
-                            cancelButtonColor: '#d33',
-                            confirmButtonText: 'Yes, delete it!'
-                          });
-                          if (result.isConfirmed) {
-                            deleteProduct(p.id);
-                            Swal.fire('Deleted!', 'Product has been deleted.', 'success');
-                          }
-                        }} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="h-5 w-5"/></button>
-                      </td>
-                    </tr>
-                  ))}
-                  {filteredCollectionProducts.length === 0 && <tr><td colSpan={4} className="p-6 text-center text-gray-500">No products found in the collection.</td></tr>}
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-4">
+                            {p.image && <img src={p.image} className="w-20 h-20 rounded-2xl object-cover border-2 border-gray-100 shadow-sm transition-transform hover:scale-110" alt="" />}
+                            <div className="flex flex-col gap-1">
+                              <span className="font-bold text-gray-900 font-sans tracking-tight">{p.name}</span>
+                              <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                                {p.category}{p.subCategory ? ` › ${p.subCategory}` : ''} • <span className="text-black font-mono font-black">{p.code}</span>
+                              </span>
+                              {variantCodeList.length > 0 && (
+                                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                                  <span className="text-[8px] font-black uppercase text-gray-400">Image Codes:</span>
+                                  {variantCodeList.map((vc, vIdx) => (
+                                    <span key={vIdx} className="text-[9px] font-mono font-bold bg-gray-100 text-gray-700 border border-gray-200 px-1.5 py-0.5 rounded">
+                                      {vc}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-4">
+                          <div className="flex items-center gap-2">
+                            <input 
+                              type="number" 
+                              readOnly
+                              disabled
+                              className={`w-16 border border-gray-100 rounded-lg p-1.5 text-xs font-black text-center cursor-not-allowed ${
+                                p.stock <= 0 
+                                  ? 'bg-red-50 text-red-600 border-red-200' 
+                                  : p.stock < 5 
+                                  ? 'bg-amber-50 text-amber-600 border-amber-200' 
+                                  : 'bg-gray-50 text-gray-900'
+                              }`}
+                              value={p.stock || 0}
+                            />
+                            {p.stock <= 0 ? (
+                              <span className="text-[8px] font-black uppercase text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100 whitespace-nowrap">Stock Out</span>
+                            ) : p.stock < 5 ? (
+                              <span className="text-[8px] font-black uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 whitespace-nowrap animate-pulse">Low Stock</span>
+                            ) : null}
+                          </div>
+                        </td>
+                        <td className="p-4 font-black">৳{p.price}</td>
+                        <td className="p-4 text-right">
+                          <button onClick={() => openEditProductModal(p)} className="text-blue-500 hover:bg-blue-50 p-2 rounded-lg mr-2"><Edit className="h-5 w-5"/></button>
+                          <button onClick={async () => {
+                            const result = await Swal.fire({
+                              title: 'Are you sure?',
+                              text: "Delete this product from collection?",
+                              icon: 'warning',
+                              showCancelButton: true,
+                              confirmButtonColor: '#000',
+                              cancelButtonColor: '#d33',
+                              confirmButtonText: 'Yes, delete it!'
+                            });
+                            if (result.isConfirmed) {
+                              deleteProduct(p.id);
+                              Swal.fire('Deleted!', 'Product has been deleted.', 'success');
+                            }
+                          }} className="text-red-500 hover:bg-red-50 p-2 rounded-lg"><Trash2 className="h-5 w-5"/></button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredCollectionProducts.length === 0 && <tr><td colSpan={5} className="p-6 text-center text-gray-500">No products found in the collection.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -5586,6 +6475,7 @@ export default function AdminDashboard() {
               const query = appliedOrderQuery.trim().toLowerCase();
               const matchesSearch = !query || 
                 order.id.toLowerCase().includes(query) ||
+                formatOrderId(order.id).toLowerCase().includes(query) ||
                 (order.customer.phone && order.customer.phone.toLowerCase().includes(query)) ||
                 (order.customer.name && order.customer.name.toLowerCase().includes(query));
 
@@ -5888,7 +6778,7 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="py-4 px-4">
                                   <div className="flex flex-col">
-                                    <span className="font-mono font-black text-gray-900 dark:text-white">#{order.id}</span>
+                                    <span className="font-mono font-black text-gray-900 dark:text-white">#{formatOrderId(order.id)}</span>
                                     {order.notes && (
                                       <span className="text-[9px] bg-amber-50 text-amber-700 font-bold uppercase tracking-wider px-1.5 py-0.5 rounded mt-1 w-fit">
                                         Has Notes
@@ -5910,9 +6800,9 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="py-4 px-4">
                                   <div className="flex -space-x-3 overflow-hidden">
-                                    {order.items.slice(0, 3).map((item, i) => (
+                                    {order.items.slice(0, 3).map((item) => (
                                       <img 
-                                        key={i} 
+                                        key={(item as any).cartItemId || (item.id + (item.selectedSize || ''))} 
                                         src={item.image} 
                                         className="w-8 h-8 rounded-lg border-2 border-white dark:border-gray-950 object-cover shadow bg-white shrink-0" 
                                         alt=""
@@ -6019,7 +6909,7 @@ export default function AdminDashboard() {
                                 {orderToDisplay?.status}
                               </span>
                             </div>
-                            <p className="text-sm uppercase font-black text-white/60 tracking-widest mt-1">ID: {orderToDisplay?.id}</p>
+                            <p className="text-sm uppercase font-black text-white/60 tracking-widest mt-1">ID: {formatOrderId(orderToDisplay?.id)}</p>
                             
                             <div className="mt-3 flex flex-wrap items-center gap-2">
                               {!isEditingOrder ? (
@@ -6048,7 +6938,7 @@ export default function AdminDashboard() {
                                         setIsEditingOrder(false);
                                         
                                         // Also send updated invoice to customer
-                                        fetch('/api/send-invoice', {
+                                        fetch(apiUrl('/api/send-invoice'), {
                                           method: 'POST',
                                           headers: { 'Content-Type': 'application/json' },
                                           body: JSON.stringify({ email: editingOrderState.customer.email || '', order: editingOrderState })
@@ -6201,7 +7091,7 @@ export default function AdminDashboard() {
                               </h3>
                               <div className="space-y-4">
                                 {orderToDisplay?.items.map((item, idx) => (
-                                  <div key={idx} className="flex flex-col md:flex-row gap-6 p-5 rounded-[2rem] border border-gray-100 hover:border-gray-250 transition-colors bg-gray-50/30">
+                                  <div key={(item as any).cartItemId || (item.id + (item.selectedSize || '') + idx)} className="flex flex-col md:flex-row gap-6 p-5 rounded-[2rem] border border-gray-100 hover:border-gray-250 transition-colors bg-gray-50/30">
                                     <img src={item.image} alt={item.name} className="w-24 h-24 object-cover rounded-[1.5rem] shadow-md bg-white shrink-0 mx-auto md:mx-0" />
                                     <div className="flex-1 flex flex-col justify-center min-w-0">
                                       <div className="flex justify-between items-start">
@@ -6289,7 +7179,12 @@ export default function AdminDashboard() {
                               const filteredProductsToAdd = products.filter(p => {
                                 const q = productSearchQuery.toLowerCase().trim();
                                 if (!q) return true;
-                                return p.name.toLowerCase().includes(q) || (p.code || '').toLowerCase().includes(q);
+                                return (
+                                  p.name.toLowerCase().includes(q) ||
+                                  (p.code || '').toLowerCase().includes(q) ||
+                                  (p.variantCodes && p.variantCodes.some(vc => vc.toLowerCase().includes(q))) ||
+                                  (p.imageVariants && p.imageVariants.some(v => v.code && v.code.toLowerCase().includes(q)))
+                                );
                               });
 
                               return (
@@ -6300,12 +7195,12 @@ export default function AdminDashboard() {
                                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                                     {/* Search Input */}
                                     <div className="md:col-span-4 relative">
-                                      <label className="block text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">Search & Select Product (প্রোডাক্ট খুঁজুন)</label>
+                                      <label className="block text-[9px] font-black text-gray-400 tracking-widest uppercase mb-1">Search & Select Product (প্রোডাক্ট বা যেকোনো ছবির কোড খুঁজুন)</label>
                                       <div className="relative">
                                         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                         <input
                                           type="text"
-                                          placeholder="Type product name or code..."
+                                          placeholder="Type product name, main code, or variant image code..."
                                           value={productSearchQuery}
                                           onChange={(e) => {
                                              setProductSearchQuery(e.target.value);
@@ -6317,17 +7212,24 @@ export default function AdminDashboard() {
                                       {/* Suggestions */}
                                       {productSearchQuery && !selectedProductToAdd && (
                                         <ul className="absolute z-50 mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg max-h-40 overflow-y-auto">
-                                          {products
-                                            .filter(p => (p.name?.toLowerCase().includes(productSearchQuery.toLowerCase()) || p.code?.toLowerCase().includes(productSearchQuery.toLowerCase())) && !editingOrderState?.items?.find(i => i.id === p.id))
-                                            .map(p => (
-                                            <li key={p.id} className="p-2 text-xs hover:bg-gray-100 cursor-pointer text-gray-900 border-b border-gray-50 flex items-center gap-2" onClick={() => {
-                                              setProductSearchQuery(p.name);
-                                              setSelectedProductToAdd(p.id);
-                                            }}>
-                                              {p.image && <img src={p.image} alt={p.name} className="w-8 h-8 object-cover rounded" />}
-                                              <span className="font-bold">{p.name}</span> {p.code ? <span className="text-[10px] text-gray-500">[{p.code}]</span> : ''}
-                                            </li>
-                                          ))}
+                                          {filteredProductsToAdd
+                                            .filter(p => !editingOrderState?.items?.find(i => i.id === p.id))
+                                            .map(p => {
+                                              const qLower = productSearchQuery.toLowerCase().trim();
+                                              const matchedVarCode = p.imageVariants?.find(v => v.code && v.code.toLowerCase().includes(qLower))?.code ||
+                                                p.variantCodes?.find(vc => vc.toLowerCase().includes(qLower)) ||
+                                                p.code;
+                                              return (
+                                                <li key={p.id} className="p-2 text-xs hover:bg-gray-100 cursor-pointer text-gray-900 border-b border-gray-50 flex items-center gap-2" onClick={() => {
+                                                  setProductSearchQuery(matchedVarCode || p.name);
+                                                  setSelectedProductToAdd(p.id);
+                                                }}>
+                                                  {p.image && <img src={p.image} alt={p.name} className="w-8 h-8 object-cover rounded" />}
+                                                  <span className="font-bold">{p.name}</span>
+                                                  {matchedVarCode ? <span className="text-[10px] font-mono font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded">[{matchedVarCode}]</span> : ''}
+                                                </li>
+                                              );
+                                            })}
                                         </ul>
                                       )}
                                     </div>
@@ -6471,7 +7373,7 @@ export default function AdminDashboard() {
                                       <MapPin className="w-5 h-5 text-blue-400 shrink-0" />
                                       <div>
                                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Delivery Address</p>
-                                        <p className="text-sm font-medium leading-relaxed">
+                                        <p className="text-sm font-medium leading-relaxed break-words whitespace-pre-line">
                                           <span className="block font-black text-white mb-0.5">{orderToDisplay?.customer.district || 'General'}</span>
                                           {orderToDisplay?.customer.address}
                                         </p>
@@ -6886,19 +7788,27 @@ export default function AdminDashboard() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category Link</label>
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category / Sub-Category Link</label>
                         <select 
                           className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors"
                           onChange={e => {
                             if (e.target.value) {
-                              setNewSlide({...newSlide, link: `/shop?category=${encodeURIComponent(e.target.value)}`});
+                              setNewSlide({...newSlide, link: e.target.value});
                             }
                           }}
                         >
-                          <option key="slide-cat" value="">-- Choose Category --</option>
-                          {adminCategories.filter(c => c !== 'all').map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
+                          <option key="slide-cat" value="">-- Choose Category / Sub-Category --</option>
+                          {adminCategories.filter(c => c !== 'all').flatMap(cat => {
+                            const subs = getSubCategoriesFor(cat);
+                            return [
+                              <option key={cat} value={`/shop?category=${encodeURIComponent(cat)}`}>{cat}</option>,
+                              ...subs.map(sub => (
+                                <option key={`${cat}-${sub}`} value={`/shop?category=${encodeURIComponent(cat)}&subCategory=${encodeURIComponent(sub)}`}>
+                                  &nbsp;&nbsp;↳ {cat} › {sub}
+                                </option>
+                              ))
+                            ];
+                          })}
                         </select>
                       </div>
                       <div>
@@ -7025,19 +7935,27 @@ export default function AdminDashboard() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category Link</label>
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category / Sub-Category Link</label>
                         <select 
                           className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors"
                           onChange={e => {
                             if (e.target.value) {
-                              setNewCategoryBanner({...newCategoryBanner, link: `/shop?category=${encodeURIComponent(e.target.value)}`});
+                              setNewCategoryBanner({...newCategoryBanner, link: e.target.value});
                             }
                           }}
                         >
-                          <option key="banner-cat" value="">-- Choose Category --</option>
-                          {adminCategories.filter(c => c !== 'all').map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
+                          <option key="banner-cat" value="">-- Choose Category / Sub-Category --</option>
+                          {adminCategories.filter(c => c !== 'all').flatMap(cat => {
+                            const subs = getSubCategoriesFor(cat);
+                            return [
+                              <option key={cat} value={`/shop?category=${encodeURIComponent(cat)}`}>{cat}</option>,
+                              ...subs.map(sub => (
+                                <option key={`${cat}-${sub}`} value={`/shop?category=${encodeURIComponent(cat)}&subCategory=${encodeURIComponent(sub)}`}>
+                                  &nbsp;&nbsp;↳ {cat} › {sub}
+                                </option>
+                              ))
+                            ];
+                          })}
                         </select>
                       </div>
                       <div>
@@ -7098,19 +8016,27 @@ export default function AdminDashboard() {
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category Link</label>
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category / Sub-Category Link</label>
                         <select 
                           className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors"
                           onChange={e => {
                             if (e.target.value) {
-                              setEditingCategoryBanner({...editingCategoryBanner, link: `/shop?category=${encodeURIComponent(e.target.value)}`});
+                              setEditingCategoryBanner({...editingCategoryBanner, link: e.target.value});
                             }
                           }}
                         >
-                          <option key="edit-banner-cat" value="">-- Choose Category --</option>
-                          {adminCategories.filter(c => c !== 'all').map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
+                          <option key="edit-banner-cat" value="">-- Choose Category / Sub-Category --</option>
+                          {adminCategories.filter(c => c !== 'all').flatMap(cat => {
+                            const subs = getSubCategoriesFor(cat);
+                            return [
+                              <option key={cat} value={`/shop?category=${encodeURIComponent(cat)}`}>{cat}</option>,
+                              ...subs.map(sub => (
+                                <option key={`${cat}-${sub}`} value={`/shop?category=${encodeURIComponent(cat)}&subCategory=${encodeURIComponent(sub)}`}>
+                                  &nbsp;&nbsp;↳ {cat} › {sub}
+                                </option>
+                              ))
+                            ];
+                          })}
                         </select>
                       </div>
                       <div>
@@ -7217,7 +8143,7 @@ export default function AdminDashboard() {
                 <button 
                   onClick={() => {
                     setEditingLookbook(null);
-                    setNewLookbook({ image: '', link: '', className: 'col-span-1 row-span-1', serial: lookbook.length + 1, title: '' });
+                    setNewLookbook({ image: '', link: '', className: 'col-span-1 row-span-1', widthPercent: '100%', heightPercent: '100%', serial: lookbook.length + 1, title: '' });
                     setIsAddingLookbook(!isAddingLookbook);
                   }}
                   className="bg-black text-white px-4 py-2.5 rounded-xl flex items-center gap-2 hover:bg-gray-800 tracking-wider text-xs font-bold uppercase transition-all shadow-sm active:scale-95"
@@ -7379,6 +8305,7 @@ export default function AdminDashboard() {
                                 link: l.link,
                                 className: l.className || 'col-span-1 row-span-1',
                                 widthPercent: l.widthPercent || '100%',
+                                heightPercent: l.heightPercent || '100%',
                                 serial: l.serial || 1,
                                 title: l.title || ''
                               });
@@ -7711,19 +8638,27 @@ export default function AdminDashboard() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2">
                       <div>
-                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Quick Category Link</label>
+                        <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Quick Category / Sub-Category Link</label>
                         <select 
                           className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors"
                           onChange={e => {
                             if (e.target.value) {
-                              setNewLookbook({...newLookbook, link: `/shop?category=${encodeURIComponent(e.target.value)}`});
+                              setNewLookbook({...newLookbook, link: e.target.value});
                             }
                           }}
                         >
-                          <option key="lookbook-cat" value="">-- Choose Category --</option>
-                          {adminCategories.filter(c => c !== 'all').map(cat => (
-                            <option key={cat} value={cat}>{cat}</option>
-                          ))}
+                          <option key="lookbook-cat" value="">-- Choose Category / Sub-Category --</option>
+                          {adminCategories.filter(c => c !== 'all').flatMap(cat => {
+                            const subs = getSubCategoriesFor(cat);
+                            return [
+                              <option key={cat} value={`/shop?category=${encodeURIComponent(cat)}`}>{cat}</option>,
+                              ...subs.map(sub => (
+                                <option key={`${cat}-${sub}`} value={`/shop?category=${encodeURIComponent(cat)}&subCategory=${encodeURIComponent(sub)}`}>
+                                  &nbsp;&nbsp;↳ {cat} › {sub}
+                                </option>
+                              ))
+                            ];
+                          })}
                         </select>
                       </div>
                       <div>
@@ -7829,6 +8764,7 @@ export default function AdminDashboard() {
                                 link: l.link,
                                 className: l.className || 'col-span-1 row-span-1',
                                 widthPercent: l.widthPercent || '100%',
+                                heightPercent: l.heightPercent || '100%',
                                 serial: l.serial || 1,
                                 title: l.title || ''
                               });
@@ -8081,19 +9017,27 @@ export default function AdminDashboard() {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:col-span-2">
                           <div>
-                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category Link</label>
+                            <label className="block text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">Auto Category / Sub-Category Link</label>
                             <select 
                               className="w-full border border-gray-200 rounded-xl p-3 text-sm focus:ring-1 focus:ring-black focus:outline-none bg-gray-50 focus:bg-white transition-colors"
                               onChange={e => {
                                 if (e.target.value) {
-                                  setNewHomeAd({...newHomeAd, linkUrl: `/shop?category=${encodeURIComponent(e.target.value)}`});
+                                  setNewHomeAd({...newHomeAd, linkUrl: e.target.value});
                                 }
                               }}
                             >
-                              <option key="homead-cat" value="">-- Choose Category --</option>
-                              {adminCategories.filter(c => c !== 'all').map(cat => (
-                                <option key={cat} value={cat}>{cat}</option>
-                              ))}
+                              <option key="homead-cat" value="">-- Choose Category / Sub-Category --</option>
+                              {adminCategories.filter(c => c !== 'all').flatMap(cat => {
+                                const subs = getSubCategoriesFor(cat);
+                                return [
+                                  <option key={cat} value={`/shop?category=${encodeURIComponent(cat)}`}>{cat}</option>,
+                                  ...subs.map(sub => (
+                                    <option key={`${cat}-${sub}`} value={`/shop?category=${encodeURIComponent(cat)}&subCategory=${encodeURIComponent(sub)}`}>
+                                      &nbsp;&nbsp;↳ {cat} › {sub}
+                                    </option>
+                                  ))
+                                ];
+                              })}
                             </select>
                           </div>
                           <div>
@@ -8962,7 +9906,26 @@ export default function AdminDashboard() {
                                     setEditingAdmin(admin);
                                     setNewAdminEmail(admin.email);
                                     setNewAdminPassword(''); // Don't show password
-                                    setNewAdminPermissions({ dashboard: false, ...admin.permissions });
+                                    setNewAdminPermissions({
+                                      dashboard: false,
+                                      products: false,
+                                      orders: false,
+                                      coupons: false,
+                                      slides: false,
+                                      categoryBanners: false,
+                                      categories: false,
+                                      lookbook: false,
+                                      subscribers: false,
+                                      messages: false,
+                                      ads: false,
+                                      faqs: false,
+                                      policies: false,
+                                      otps: false,
+                                      otpsDelete: false,
+                                      reviews: false,
+                                      notifications: false,
+                                      ...admin.permissions
+                                    });
                                     setIsAddingAdmin(true);
                                   }}
                                   className="flex items-center gap-1 text-[10px] uppercase tracking-widest font-black bg-gray-50 border text-gray-700 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"

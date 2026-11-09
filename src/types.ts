@@ -68,6 +68,7 @@ export interface ProductImageVariant {
   id: string;
   image: string;
   title?: string;
+  code?: string;
   sizeStocks: { [size: string]: number };
   stock: number;
 }
@@ -81,7 +82,9 @@ export interface Product {
   isCollection?: boolean;
   description: string;
   category: string;
+  subCategory?: string;
   code?: string;
+  variantCodes?: string[];
   sizeChartImage?: string;
   images?: string[]; 
   serial?: number;
@@ -98,6 +101,7 @@ export interface Category {
   id: string;
   name: string;
   slug: string;
+  subCategories?: string[];
   deleted?: boolean;
 }
 

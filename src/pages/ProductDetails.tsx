@@ -1,13 +1,16 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useShop } from '../ShopContext';
 import { ArrowLeft, ShoppingCart, ShieldCheck, Truck, Plus, Minus, X, Ruler, Star, MessageSquare, CheckCircle, Calendar, Copy, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Helmet } from 'react-helmet-async';
 import Swal from 'sweetalert2';
+import { apiUrl } from '../lib/api';
 
 export default function ProductDetails() {
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const requestedCode = searchParams.get('code')?.trim().toUpperCase() || '';
   const navigate = useNavigate();
   const { products, addToCart, setIsCartOpen, reviews, addReview, cart, updateCartQuantity, getProductPriceForSize, getProductStockForSize } = useShop();
 
@@ -77,7 +80,7 @@ export default function ProductDetails() {
     setActiveImageIndex(0);
     if (!id) return;
     let isMounted = true;
-    fetch(`/api/products/${id}`)
+    fetch(apiUrl(`/api/products/${id}`))
       .then(res => res.ok ? res.json() : null)
       .then(data => {
         if (isMounted && data && data.id === id) {
@@ -162,6 +165,43 @@ export default function ProductDetails() {
 
   const selectedImg = galleryImages[activeImageIndex] || product.image || '';
 
+  const activeVariant = useMemo(() => {
+    if (!product?.imageVariants || product.imageVariants.length === 0) return undefined;
+    return product.imageVariants.find(v => v.image === selectedImg) || product.imageVariants[activeImageIndex];
+  }, [product, selectedImg, activeImageIndex]);
+
+  const activeProductCode = useMemo(() => {
+    if (activeVariant?.code) return activeVariant.code;
+    if (product?.variantCodes && product.variantCodes[activeImageIndex]) {
+      return product.variantCodes[activeImageIndex];
+    }
+    return product?.code || '';
+  }, [activeVariant, product, activeImageIndex]);
+
+  useEffect(() => {
+    if (!requestedCode || !product) return;
+    if (product.imageVariants && product.imageVariants.length > 0) {
+      const matchedVariant = product.imageVariants.find(
+        v => v.code && v.code.trim().toUpperCase() === requestedCode
+      );
+      if (matchedVariant?.image) {
+        const imgIdx = galleryImages.findIndex(img => img === matchedVariant.image);
+        if (imgIdx !== -1) {
+          setActiveImageIndex(imgIdx);
+          return;
+        }
+      }
+    }
+    if (product.variantCodes && product.variantCodes.length > 0) {
+      const codeIdx = product.variantCodes.findIndex(
+        vc => vc && vc.trim().toUpperCase() === requestedCode
+      );
+      if (codeIdx !== -1 && codeIdx < galleryImages.length) {
+        setActiveImageIndex(codeIdx);
+      }
+    }
+  }, [requestedCode, product, galleryImages]);
+
   const currentVariantStock = useMemo(() => {
     if (!product) return 0;
     return getProductStockForSize(product, selectedSize, selectedImg);
@@ -189,7 +229,8 @@ export default function ProductDetails() {
     if (!product || isOutOfStock || isAdded) return;
     const productWithSelectedImage = {
       ...product,
-      image: selectedImg
+      image: selectedImg,
+      code: activeProductCode || product.code
     };
     addToCart(productWithSelectedImage, quantity, selectedSize);
     setIsAdded(true);
@@ -200,7 +241,8 @@ export default function ProductDetails() {
     if (isOutOfStock) return;
     const productWithSelectedImage = {
       ...product,
-      image: selectedImg
+      image: selectedImg,
+      code: activeProductCode || product.code
     };
     addToCart(productWithSelectedImage, quantity, selectedSize);
     navigate('/checkout');
@@ -349,27 +391,38 @@ export default function ProductDetails() {
             {/* Thumbnails list */}
             {galleryImages.length > 1 && (
               <div className="flex items-center gap-3 overflow-x-auto pb-1 scrollbar-thin">
-                {galleryImages.map((imgSrc, idx) => (
-                  <button
-                    key={idx}
-                    type="button"
-                    onClick={() => setActiveImageIndex(idx)}
-                    className={`relative w-20 h-24 rounded-xl overflow-hidden flex-shrink-0 border bg-gray-50 transition-all ${
-                      activeImageIndex === idx 
-                        ? 'border-black ring-2 ring-black/10 scale-95' 
-                        : 'border-gray-200 hover:border-gray-400'
-                    }`}
-                  >
-                    <img 
-                      src={imgSrc} 
-                      alt="" 
-                      loading="lazy"
-                      decoding="async"
-                      className="w-full h-full object-cover" 
-                      referrerPolicy="no-referrer"
-                    />
-                  </button>
-                ))}
+                {galleryImages.map((imgSrc, idx) => {
+                  const thumbVariant = product.imageVariants?.find(v => v.image === imgSrc) || product.imageVariants?.[idx];
+                  const thumbCode = thumbVariant?.code || product.variantCodes?.[idx] || '';
+                  return (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setActiveImageIndex(idx)}
+                      className={`relative w-20 h-24 rounded-xl overflow-hidden flex-shrink-0 border bg-gray-50 transition-all ${
+                        activeImageIndex === idx 
+                          ? 'border-black ring-2 ring-black/10 scale-95' 
+                          : 'border-gray-200 hover:border-gray-400'
+                      }`}
+                    >
+                      <img 
+                        src={imgSrc} 
+                        alt="" 
+                        loading="lazy"
+                        decoding="async"
+                        className="w-full h-full object-cover" 
+                        referrerPolicy="no-referrer"
+                      />
+                      {thumbCode && (
+                        <span className={`absolute bottom-0 inset-x-0 text-[8px] font-mono font-black uppercase py-0.5 text-center truncate px-1 ${
+                          activeImageIndex === idx ? 'bg-black text-white' : 'bg-black/65 text-white'
+                        }`}>
+                          {thumbCode}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -408,7 +461,44 @@ export default function ProductDetails() {
                 </button>
               </div>
             </div>
-            <h1 className="text-3xl md:text-5xl font-black text-gray-900 mb-4 uppercase tracking-tight leading-none">{product.name}</h1>
+            {(product.category || product.subCategory) && (
+              <div className="flex flex-wrap items-center gap-1.5 mb-2">
+                {product.category && (
+                  <Link
+                    to={`/shop?category=${encodeURIComponent(product.category)}`}
+                    className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-gray-100 hover:bg-black hover:text-white text-gray-700 transition-colors"
+                  >
+                    {product.category}
+                  </Link>
+                )}
+                {product.subCategory && (
+                  <>
+                    <span className="text-gray-300 font-bold text-xs">›</span>
+                    <Link
+                      to={`/shop?category=${encodeURIComponent(product.category || '')}&subCategory=${encodeURIComponent(product.subCategory)}`}
+                      className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-gray-100 hover:bg-black hover:text-white text-gray-700 transition-colors"
+                    >
+                      {product.subCategory}
+                    </Link>
+                  </>
+                )}
+              </div>
+            )}
+            <h1 className="text-3xl md:text-5xl font-black text-gray-900 mb-3 uppercase tracking-tight leading-none">{product.name}</h1>
+
+            {/* Dynamic Variant Product Code Badge */}
+            {activeProductCode && (
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <span className="inline-flex items-center gap-1.5 bg-gray-900 text-white text-[11px] font-mono font-black uppercase tracking-wider px-3 py-1 rounded-lg shadow-xs">
+                  Code: {activeProductCode}
+                </span>
+                {activeVariant?.title && (
+                  <span className="inline-flex items-center bg-gray-100 text-gray-700 text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-lg border border-gray-200">
+                    {activeVariant.title}
+                  </span>
+                )}
+              </div>
+            )}
             
             {/* Top Rating Summary */}
             {productReviews.length > 0 && (
@@ -756,7 +846,7 @@ export default function ProductDetails() {
                           type="text" 
                           value={reviewOrderLine}
                           onChange={(e) => setReviewOrderLine(e.target.value)}
-                          placeholder="Ex: NTD-168545..."
+                          placeholder="Ex: TCB-168545..."
                           className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 text-sm font-black tracking-widest focus:ring-2 focus:ring-black/5 focus:border-black outline-none transition-all focus:bg-white uppercase placeholder:normal-case placeholder:font-bold"
                         />
                         <p className="text-[9px] text-gray-400 font-bold uppercase ml-1 italic leading-tight">Must match the exact order ID provided in your invoice.</p>

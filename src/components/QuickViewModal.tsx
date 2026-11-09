@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { X, ChevronLeft, ChevronRight, ShoppingBag } from 'lucide-react';
 import { Product } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { apiUrl } from '../lib/api';
 
 interface QuickViewModalProps {
   product: Product | null;
@@ -24,7 +25,7 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClos
     setFullProduct(product);
     if (isOpen && product?.id && (!product.images || product.images.length === 0)) {
       let isMounted = true;
-      fetch(`/api/products/${product.id}`)
+      fetch(apiUrl(`/api/products/${product.id}`))
         .then(res => res.ok ? res.json() : null)
         .then(data => {
           if (isMounted && data && data.id === product.id) {
@@ -189,7 +190,7 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClos
                   <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2 px-3 py-2 bg-black/30 backdrop-blur-md rounded-2xl z-20 max-w-[90%] overflow-x-auto hide-scrollbar">
                     {images.map((img, idx) => (
                       <button
-                        key={idx}
+                        key={img || idx}
                         onClick={() => {
                           if (idx !== currentImageIndex) {
                             setDirection(idx > currentImageIndex ? 1 : -1);
@@ -220,10 +221,20 @@ const QuickViewModal: React.FC<QuickViewModalProps> = ({ product, isOpen, onClos
             {/* Right: Product Details */}
             <div className="md:w-[45%] p-6 sm:p-8 md:p-10 flex flex-col overflow-y-auto custom-scrollbar">
               <div className="flex-1">
-                <div className="mb-3">
+                <div className="mb-3 flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-black text-teal-600 dark:text-teal-400 uppercase tracking-[0.2em] bg-teal-50 dark:bg-teal-900/30 px-3 py-1.5 rounded-full border border-teal-100 dark:border-teal-800">
-                    {product.category}
+                    {product.category}{product.subCategory ? ` › ${product.subCategory}` : ''}
                   </span>
+                  {(() => {
+                    const currentImg = images[currentImageIndex];
+                    const matchedVar = activeProduct?.imageVariants?.find(v => v.image === currentImg) || activeProduct?.imageVariants?.[currentImageIndex];
+                    const codeToShow = matchedVar?.code || activeProduct?.variantCodes?.[currentImageIndex] || activeProduct?.code;
+                    return codeToShow ? (
+                      <span className="text-[10px] font-mono font-black text-white bg-black dark:bg-white dark:text-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+                        Code: {codeToShow}
+                      </span>
+                    ) : null;
+                  })()}
                 </div>
                 
                 <h2 className="text-2xl md:text-3xl font-black text-gray-900 dark:text-white mb-3 leading-[1.1] tracking-tight">

@@ -124,7 +124,7 @@ const ProductCard: React.FC<{ product: Product }> = ({ product }) => {
       <Link to={`/product/${product.id}`} className="flex justify-between items-start block mb-3 gap-2">
         <div className="flex-1 min-w-0">
           <p className="text-[11px] font-bold uppercase text-gray-400 dark:text-gray-500 mb-1">
-            {product.category || 'Basic'} {product.code ? `• ${product.code}` : ''}
+            {product.category || 'Basic'}{product.subCategory ? ` › ${product.subCategory}` : ''} {product.code ? `• ${product.code}` : ''}
           </p>
           <h3 className="text-sm font-bold truncate text-gray-900 dark:text-white group-hover:text-blue-600 transition-colors uppercase">{product.name}</h3>
           

@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { useShop } from '../ShopContext';
 import { Search, Package, MapPin, Calendar, CreditCard, MessageCircle, Lock, ArrowRight, ArrowLeft, CheckCircle2, X, Mail, Clock, Truck, Loader2 } from 'lucide-react';
 import { Order } from '../types';
+import { formatOrderId } from '../lib/invoiceUtils';
 import { motion, AnimatePresence } from 'motion/react';
 import Swal from 'sweetalert2';
+import { apiUrl } from '../lib/api';
 
 
 declare global {
@@ -29,10 +31,14 @@ export default function TrackOrder() {
 
   const handleIdSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const cleanId = query.trim().toUpperCase();
+    const cleanId = query.trim().toUpperCase().replace(/^#/, '');
     if (!cleanId) return;
 
-    const found = orders.filter(o => o.id.toUpperCase() === cleanId);
+    const normalizedQuery = formatOrderId(cleanId).toUpperCase();
+    const found = orders.filter(o => {
+      const oid = o.id.toUpperCase();
+      return oid === cleanId || formatOrderId(oid).toUpperCase() === normalizedQuery;
+    });
     if (found.length > 0) {
       setResults(found);
       setStep('results');
@@ -88,7 +94,7 @@ export default function TrackOrder() {
     console.log(`[DATABASE] Saved OTP for admin view: ${cleanPhone} -> ${code} (Email: ${targetEmail})`);
 
     // Call API to send OTP Email via Nodemailer SMTP integration
-    fetch('/api/send-otp-email', {
+    fetch(apiUrl('/api/send-otp-email'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: targetEmail, otp: code })
@@ -192,7 +198,7 @@ export default function TrackOrder() {
                       <input
                         type="text"
                         required
-                        placeholder="Enter Order ID (NTD-XXXXXXXXXXXXXXXX)"
+                        placeholder="Enter Order ID (TCB-XXXXXXXXXXXXXXXX)"
                         value={query}
                         onChange={(e) => setQuery(e.target.value)}
                         className="w-full bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600 rounded-2xl py-5 pl-14 pr-4 focus:ring-2 focus:ring-slate-900 dark:focus:ring-white focus:outline-none transition-all dark:text-white font-mono uppercase font-bold"
@@ -294,7 +300,7 @@ export default function TrackOrder() {
                 <div className="text-center md:text-left">
                   <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Search Results</h3>
                   <p className="text-lg font-black dark:text-white">
-                    {searchBy === 'phone' ? phone : results[0]?.id} 
+                    {searchBy === 'phone' ? phone : formatOrderId(results[0]?.id)} 
                     <span className="text-green-500 ml-2 text-[9px] font-black uppercase tracking-widest flex items-center gap-1 inline-flex"><CheckCircle2 className="h-3 w-3" /> Verified</span>
                   </p>
                 </div>
@@ -316,7 +322,7 @@ export default function TrackOrder() {
                       <div className="flex justify-between items-start mb-6">
                         <div>
                           <div className="bg-slate-50 dark:bg-slate-700 text-slate-400 px-2 py-0.5 rounded text-[10px] font-bold mb-1 w-fit">Order ID</div>
-                          <h4 className="font-mono font-bold text-slate-900 dark:text-white uppercase truncate max-w-[120px]">{order.id}</h4>
+                          <h4 className="font-mono font-bold text-slate-900 dark:text-white uppercase truncate max-w-[160px]">{formatOrderId(order.id)}</h4>
                         </div>
                         <span className={`capitalize px-3 py-1.5 rounded-full text-[10px] font-bold border  ${
                           order.status === 'pending' ? 'bg-amber-50 text-amber-600 border-amber-100' :
@@ -346,10 +352,10 @@ export default function TrackOrder() {
 
                       <div className="bg-slate-50 dark:bg-slate-700/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-700">
                         <div className="flex -space-x-4 mb-3 overflow-hidden">
-                          {order.items.slice(0, 4).map((item, i) => (
+                          {order.items.slice(0, 4).map((item) => (
                             item.image ? (
                               <img 
-                                key={i} 
+                                key={(item as any).cartItemId || (item.id + (item.selectedSize || ''))} 
                                 src={item.image} 
                                 alt="" 
                                 className="w-16 h-16 rounded-2xl border-2 border-white dark:border-slate-800 object-cover bg-white shadow-md transition-transform group-hover:scale-110" 
@@ -403,7 +409,7 @@ export default function TrackOrder() {
                   <div className="flex justify-between items-start mb-8">
                     <div>
                       <h2 className="text-2xl font-black uppercase text-slate-900 dark:text-white tracking-tighter">Order <span className="text-blue-600">Details</span></h2>
-                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mt-1">ID: {selectedOrder.id}</p>
+                      <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mt-1">ID: {formatOrderId(selectedOrder.id)}</p>
                     </div>
                     <button 
                       onClick={() => setSelectedOrder(null)}

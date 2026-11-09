@@ -13,15 +13,15 @@ export default function Home() {
   const [subEmail, setSubEmail] = useState('');
   const [loading, setLoading] = useState(!isDbLoaded);
 
-  const hotProducts = products.filter(p => p.isHotSale).slice(0, 4);
-  const displayHotProducts = hotProducts.length > 0 ? hotProducts : products.slice(0, 4);
+  const getSerialRank = (p: { serial?: number }) => (typeof p.serial === 'number' && p.serial > 0 ? p.serial : 999999);
+  const sortedAllProducts = [...products].sort((a, b) => getSerialRank(a) - getSerialRank(b));
+  const hotProducts = sortedAllProducts.filter(p => p.isHotSale).slice(0, 4);
+  const displayHotProducts = hotProducts.length > 0 ? hotProducts : sortedAllProducts.slice(0, 4);
   const displayCollectionProducts = (
-    products.filter(p => p.isCollection).length > 0
-      ? products.filter(p => p.isCollection)
-      : products
-  )
-    .sort((a, b) => (a.serial || 0) - (b.serial || 0))
-    .slice(0, 5);
+    sortedAllProducts.filter(p => p.isCollection).length > 0
+      ? sortedAllProducts.filter(p => p.isCollection)
+      : sortedAllProducts
+  ).slice(0, 5);
 
   const activeSlides = slides.filter(s => !s.deleted);
 
@@ -246,7 +246,7 @@ export default function Home() {
           </Link>
         </div>
         
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
           {!isDbLoaded || displayCollectionProducts.length === 0 ? (
              Array(5).fill(0).map((_, i) => <ProductCardSkeleton key={i} />)
           ) : (

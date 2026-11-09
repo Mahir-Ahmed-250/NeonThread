@@ -14,6 +14,17 @@ if (typeof window !== 'undefined' && window.localStorage) {
       console.warn('Failed to clear or set storage quota', e);
     }
   }
+
+  // Ignore Vite WebSocket errors in this environment
+  window.addEventListener('unhandledrejection', (event) => {
+    if (event.reason && (
+      event.reason.message?.includes('WebSocket') || 
+      event.reason.message?.includes('vite') ||
+      String(event.reason).includes('WebSocket closed without opened')
+    )) {
+      event.preventDefault();
+    }
+  });
 }
 
 createRoot(document.getElementById('root')!).render(

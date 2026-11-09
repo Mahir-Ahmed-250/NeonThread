@@ -37,7 +37,7 @@ export default function PageLoader() {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="fixed inset-0 z-[10000] bg-white flex flex-col items-center justify-center overflow-hidden"
         >
-          <div className="relative flex flex-col items-center">
+          <div className="relative z-10 flex flex-col items-center">
             {/* Branding */}
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
@@ -90,11 +90,13 @@ export default function PageLoader() {
                 </div>
               </div>
             </motion.div>
+          </div>
 
-            {/* Background elements for depth */}
-            <div className="absolute -z-10 opacity-[0.03] select-none pointer-events-none">
-              <h2 className="text-[20vw] font-black uppercase whitespace-nowrap">PREMIUM APPAREL</h2>
-            </div>
+          {/* Background elements for depth */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-[0.04] select-none pointer-events-none px-4">
+            <h2 className="text-[11vw] font-black uppercase whitespace-nowrap text-center leading-none tracking-tighter w-full">
+              TRENDY CART BD
+            </h2>
           </div>
 
           {/* Bottom Bar */}

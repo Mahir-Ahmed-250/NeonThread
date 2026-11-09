@@ -9,12 +9,19 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
+import cors from "cors";
 
 dotenv.config();
 
 const JWT_SECRET = process.env.JWT_SECRET || "neonthread_secure_fallback_secret_key";
+const IS_VERCEL = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.VERCEL_URL);
 
-const DB_FILE = process.env.VERCEL
+function getRawMongoUri(): string {
+  const raw = process.env.MONGODB_URI || process.env.MONGO_URI || process.env.DATABASE_URL || "";
+  return raw.trim().replace(/^["']+|["']+$/g, "").trim();
+}
+
+const DB_FILE = IS_VERCEL
   ? path.join('/tmp', 'db.json')
   : path.join(process.cwd(), 'db.json');
 
@@ -43,20 +50,20 @@ const COLLECTION_KEYS = [
   "socialLinks"
 ];
 
-let mongoClient: MongoClient | null = null;
-let mongoDb: Db | null = null;
+let mongoClient: MongoClient | null = (globalThis as any).__trendyMongoClient || null;
+let mongoDb: Db | null = (globalThis as any).__trendyMongoDb || null;
 let lastMongoError: string | null = null;
-let mongoConnectPromise: Promise<Db | null> | null = null;
+let mongoConnectPromise: Promise<Db | null> | null = (globalThis as any).__trendyMongoPromise || null;
 let lastPingTime = 0;
 
 async function getMongoDb(): Promise<Db | null> {
-  const envUri = process.env.MONGODB_URI;
+  const envUri = getRawMongoUri();
   if (!envUri) {
     lastMongoError = "MONGODB_URI environment variable is missing in project settings.";
     return null;
   }
 
-  // Reuse existing healthy connection, pinging at most once every 60s
+  // Reuse existing healthy connection (including globalThis cache across Vercel warm invocations)
   if (mongoClient && mongoDb) {
     if (Date.now() - lastPingTime > 60000) {
       lastPingTime = Date.now();
@@ -64,6 +71,8 @@ async function getMongoDb(): Promise<Db | null> {
         console.log("MongoDB connection stale. Resetting client for reconnect...");
         mongoClient = null;
         mongoDb = null;
+        (globalThis as any).__trendyMongoClient = null;
+        (globalThis as any).__trendyMongoDb = null;
       });
     }
     return mongoDb;
@@ -81,9 +90,7 @@ async function getMongoDb(): Promise<Db | null> {
     const regex = /^(mongodb\+srv:\/\/|mongodb:\/\/)([^/]+)/;
     const match = cleanUri.match(regex);
     if (match) {
-      const scheme = match[1]; // mongodb+srv:// or mongodb://
       const rest = match[2];
-      
       const parts = rest.split("@");
       if (parts.length >= 2) {
         const credentials = parts[0];
@@ -110,18 +117,19 @@ async function getMongoDb(): Promise<Db | null> {
     }
 
     try {
-      console.log("Connecting to MongoDB with high-speed pool and wire compression...");
+      console.log("Connecting to MongoDB...");
       mongoClient = new MongoClient(cleanUri, {
-        serverSelectionTimeoutMS: 5000,
-        connectTimeoutMS: 8000,
-        maxPoolSize: 30,
-        minPoolSize: 2,
+        serverSelectionTimeoutMS: 10000,
+        connectTimeoutMS: 10000,
+        maxPoolSize: IS_VERCEL ? 10 : 30,
+        minPoolSize: IS_VERCEL ? 0 : 1,
         maxIdleTimeMS: 60000,
-        socketTimeoutMS: 20000,
-        compressors: ['zlib']
+        socketTimeoutMS: 25000,
       });
       await mongoClient.connect();
       mongoDb = mongoClient.db("neonthread_db");
+      (globalThis as any).__trendyMongoClient = mongoClient;
+      (globalThis as any).__trendyMongoDb = mongoDb;
       console.log("Connected successfully to MongoDB database: neonthread_db!");
       lastMongoError = null;
       lastPingTime = Date.now();
@@ -131,12 +139,16 @@ async function getMongoDb(): Promise<Db | null> {
       console.error("Failed to connect to MongoDB. Error detail:", lastMongoError);
       mongoClient = null;
       mongoDb = null;
+      (globalThis as any).__trendyMongoClient = null;
+      (globalThis as any).__trendyMongoDb = null;
       return null;
     } finally {
       mongoConnectPromise = null;
+      (globalThis as any).__trendyMongoPromise = null;
     }
   })();
 
+  (globalThis as any).__trendyMongoPromise = mongoConnectPromise;
   return mongoConnectPromise;
 }
 
@@ -147,8 +159,14 @@ function sanitizePublicDb(rawDb: any) {
     db.products = db.products.filter((p: any) => !p.deleted).map((product: any) => {
       // Strip heavy secondary gallery base64 arrays (~66MB) from initial list payload;
       // they are fetched on-demand via /api/products/:id or hydrated in the background.
+      const extractedVariantCodes = Array.isArray(product.imageVariants)
+        ? product.imageVariants.map((v: any) => v?.code).filter(Boolean)
+        : undefined;
       const { costPrice, images, imageVariants, sizeChartImage, ...rest } = product;
-      return rest;
+      return {
+        ...rest,
+        ...(extractedVariantCodes && extractedVariantCodes.length > 0 ? { variantCodes: extractedVariantCodes } : {})
+      };
     });
   }
   if (db.admins) {
@@ -188,8 +206,14 @@ function sanitizeAdminDb(rawDb: any) {
     // Strip heavy secondary gallery base64 strings (~66MB) from initial admin DB fetch;
     // full product galleries are fetched on-demand when editing a product via /api/products/:id.
     db.products = db.products.map((product: any) => {
+      const extractedVariantCodes = Array.isArray(product.imageVariants)
+        ? product.imageVariants.map((v: any) => v?.code).filter(Boolean)
+        : undefined;
       const { images, imageVariants, sizeChartImage, ...rest } = product;
-      return rest;
+      return {
+        ...rest,
+        ...(extractedVariantCodes && extractedVariantCodes.length > 0 ? { variantCodes: extractedVariantCodes } : {})
+      };
     });
   }
   if (db.orders) {
@@ -211,6 +235,7 @@ let cachedAdminDbTime = 0;
 const singleProductCache = new Map<string, { data: any; time: number }>();
 let memoryDbCache: any = null;
 let memoryCacheTimestamp = 0;
+let hasSyncedFromMongo = false;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache for fast response times
 let isBackgroundSyncRunning = false;
 let pendingMongoFetchPromise: Promise<any> | null = null;
@@ -237,7 +262,23 @@ async function fetchMongoData(): Promise<any | null> {
       COLLECTION_KEYS.map(async (key) => {
         if (["maintenance_mode", "contactInfo", "wishlist", "comparison"].includes(key)) {
           const doc = await mongo.collection(key).findOne({ _id: "singleton" as any }, { maxTimeMS: 6000 });
-          return { key, data: doc && doc.value !== undefined ? doc.value : null };
+          if (doc && doc.value !== undefined) {
+            return { key, data: doc.value };
+          }
+          if (key === "contactInfo") {
+            const anyDoc = await mongo.collection(key).findOne({}, { maxTimeMS: 6000 });
+            if (anyDoc) {
+              if (anyDoc.value !== undefined) return { key, data: anyDoc.value };
+              const { _id, ...rest } = anyDoc as any;
+              if (rest.storeAddress || rest.phone || rest.email) {
+                return { key, data: rest };
+              }
+            }
+            if (memoryDbCache?.contactInfo) {
+              return { key, data: memoryDbCache.contactInfo };
+            }
+          }
+          return { key, data: null };
         } else {
           // Exclude heavy secondary gallery arrays (~66MB) during bulk list fetch so memory stays under 40MB on Render Free Tier;
           // full product galleries are queried directly from MongoDB on-demand in /api/products/:id and /api/admin/products/:id.
@@ -278,6 +319,7 @@ async function fetchMongoData(): Promise<any | null> {
 
       memoryDbCache = dbObj;
       memoryCacheTimestamp = Date.now();
+      hasSyncedFromMongo = true;
       cachedPublicDb = sanitizePublicDb(dbObj);
       cachedPublicDbTime = Date.now();
       cachedAdminDb = sanitizeAdminDb(dbObj);
@@ -293,20 +335,22 @@ async function fetchMongoData(): Promise<any | null> {
   }
 }
 
-// Pre-warm cache on startup so the very first request receives instant (< 5ms) response
-readDbFromFileOnly().then((fileDb) => {
-  if (fileDb && !memoryDbCache) {
-    memoryDbCache = fileDb;
-    memoryCacheTimestamp = Date.now();
-    cachedPublicDb = sanitizePublicDb(fileDb);
-    cachedPublicDbTime = Date.now();
-    cachedAdminDb = sanitizeAdminDb(fileDb);
-    cachedAdminDbTime = Date.now();
-    console.log("Memory DB pre-warmed from disk cache for instant responses.");
-  }
-  // Connect and sync with MongoDB asynchronously in background without blocking API requests
-  refreshMongoInBackground().catch((e) => console.log("Background MongoDB sync notice:", e?.message || e));
-}).catch(() => {});
+// Pre-warm cache on startup for non-Vercel environments when MongoDB hasn't loaded yet
+if (!IS_VERCEL) {
+  readDbFromFileOnly().then((fileDb) => {
+    if (fileDb && !memoryDbCache && !getRawMongoUri()) {
+      memoryDbCache = fileDb;
+      memoryCacheTimestamp = Date.now();
+      cachedPublicDb = sanitizePublicDb(fileDb);
+      cachedPublicDbTime = Date.now();
+      cachedAdminDb = sanitizeAdminDb(fileDb);
+      cachedAdminDbTime = Date.now();
+      console.log("Memory DB pre-warmed from disk cache.");
+    }
+    // Connect and sync with MongoDB asynchronously in background
+    refreshMongoInBackground().catch((e) => console.log("Background MongoDB sync notice:", e?.message || e));
+  }).catch(() => {});
+}
 
 async function refreshMongoInBackground() {
   if (isBackgroundSyncRunning) return;
@@ -321,49 +365,62 @@ async function refreshMongoInBackground() {
 }
 
 async function readDb(forceFresh = false) {
-  // 1. If we have fresh cached memory data, return immediately (< 1ms)
+  const hasMongoUri = Boolean(getRawMongoUri());
+
+  // 1. If MongoDB is configured and we haven't synced from MongoDB yet (e.g. cold start on Vercel),
+  // always fetch live data from MongoDB first so we never serve stale db.json instead of MongoDB!
+  if (hasMongoUri && (!hasSyncedFromMongo || forceFresh)) {
+    if (!pendingMongoFetchPromise) {
+      pendingMongoFetchPromise = fetchMongoData().finally(() => {
+        pendingMongoFetchPromise = null;
+      });
+    }
+    const liveData = await pendingMongoFetchPromise;
+    if (liveData) {
+      return liveData;
+    }
+  }
+
+  // 2. If we have fresh cached memory data, return immediately (< 1ms)
   if (!forceFresh && memoryDbCache && (Date.now() - memoryCacheTimestamp < CACHE_TTL_MS)) {
     return memoryDbCache;
   }
 
-  // 2. If memory cache exists but is expired, return stale data immediately and refresh in background
+  // 3. If memory cache exists but is expired:
+  // On Vercel serverless, await refresh because background promises freeze after res.json();
+  // on persistent servers, return stale data immediately and refresh in background.
   if (!forceFresh && memoryDbCache) {
-    refreshMongoInBackground();
+    if (IS_VERCEL && hasMongoUri) {
+      const refreshed = await fetchMongoData();
+      if (refreshed) return refreshed;
+    } else {
+      refreshMongoInBackground();
+    }
     return memoryDbCache;
   }
 
-  // 3. If memoryDbCache is not yet set, try reading from disk cache first for zero-latency response
-  if (!forceFresh && !memoryDbCache) {
-    const fileDb = await readDbFromFileOnly();
-    if (fileDb) {
-      memoryDbCache = fileDb;
-      memoryCacheTimestamp = Date.now();
-      cachedPublicDb = sanitizePublicDb(fileDb);
-      cachedPublicDbTime = Date.now();
-      cachedAdminDb = sanitizeAdminDb(fileDb);
-      cachedAdminDbTime = Date.now();
-      refreshMongoInBackground();
-      return fileDb;
+  // 4. Fetch live data from MongoDB if configured
+  if (hasMongoUri) {
+    if (!pendingMongoFetchPromise) {
+      pendingMongoFetchPromise = fetchMongoData().finally(() => {
+        pendingMongoFetchPromise = null;
+      });
+    }
+    const liveData = await pendingMongoFetchPromise;
+    if (liveData) {
+      return liveData;
     }
   }
 
-  // 4. If forceFresh or no cache exists at all, fetch live data (deduplicating concurrent calls)
-  if (!pendingMongoFetchPromise) {
-    pendingMongoFetchPromise = fetchMongoData().finally(() => {
-      pendingMongoFetchPromise = null;
-    });
-  }
-
-  const liveData = await pendingMongoFetchPromise;
-  if (liveData) {
-    return liveData;
-  }
-
-  // 5. Fallback to local disk file if live fetch didn't return data
+  // 5. Fallback to local disk file if MongoDB is not configured or unreachable
   const fileDb = await readDbFromFileOnly();
   if (fileDb) {
     memoryDbCache = fileDb;
     memoryCacheTimestamp = Date.now();
+    cachedPublicDb = sanitizePublicDb(fileDb);
+    cachedPublicDbTime = Date.now();
+    cachedAdminDb = sanitizeAdminDb(fileDb);
+    cachedAdminDbTime = Date.now();
     return fileDb;
   }
 
@@ -439,8 +496,14 @@ async function writeDbKey(key: string, data: any): Promise<boolean> {
             const existing = itemMap.get(String(item.id));
             const merged = existing ? { ...existing, ...item } : item;
             if (key === "products") {
+              const extractedVariantCodes = Array.isArray(merged.imageVariants)
+                ? merged.imageVariants.map((v: any) => v?.code).filter(Boolean)
+                : undefined;
               const { images, imageVariants, sizeChartImage, ...lite } = merged;
-              itemMap.set(String(item.id), lite);
+              itemMap.set(String(item.id), {
+                ...lite,
+                ...(extractedVariantCodes && extractedVariantCodes.length > 0 ? { variantCodes: extractedVariantCodes } : {})
+              });
             } else {
               itemMap.set(String(item.id), merged);
             }
@@ -548,7 +611,7 @@ function getTransporter() {
 const app = express();
 
 let viteInstance: any = null;
-if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+if (process.env.NODE_ENV !== "production" && !IS_VERCEL) {
   console.log("Initializing Vite dev server asynchronously...");
   import("vite").then(({ createServer }) => {
     createServer({
@@ -577,6 +640,7 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
 
   // IMPORTANT: Trust the first proxy (required for accurate rate limiting in our cloud environment)
   app.set("trust proxy", 1);
+  app.use(cors({ origin: true, credentials: true }));
   app.use(compression());
 
   // Security Hardening: Apply Helmet for secure headers and Rate Limiting
@@ -769,18 +833,21 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
 
   app.get("/api/db", async (req, res) => {
     try {
-      res.setHeader("Cache-Control", "public, max-age=30, stale-while-revalidate=120");
+      res.setHeader("Cache-Control", "public, max-age=15, stale-while-revalidate=60");
 
-      // Ultra-fast path: Return in-memory cached public DB instantly (< 1ms)
-      if (cachedPublicDb) {
-        // If cache is older than 30 seconds, trigger background sync without delaying the user
+      const hasMongoUri = Boolean(getRawMongoUri());
+      // Return in-memory cached public DB if already synced from MongoDB (or if MongoDB isn't configured)
+      if (cachedPublicDb && (!hasMongoUri || hasSyncedFromMongo)) {
         if (Date.now() - cachedPublicDbTime > 30000) {
-          refreshMongoInBackground();
+          if (IS_VERCEL && hasMongoUri) {
+            await fetchMongoData();
+          } else {
+            refreshMongoInBackground();
+          }
         }
         return res.json(cachedPublicDb);
       }
 
-      // Fast fallback to memory or disk cache (< 15ms)
       const rawDb = await readDb();
       if (!rawDb) return res.json({});
       
@@ -801,9 +868,14 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
       if (!isAdmin) {
         return res.status(401).json({ error: "Unauthorized access" });
       }
-      if (cachedAdminDb) {
+      const hasMongoUri = Boolean(getRawMongoUri());
+      if (cachedAdminDb && (!hasMongoUri || hasSyncedFromMongo)) {
         if (Date.now() - cachedAdminDbTime > 30000) {
-          refreshMongoInBackground();
+          if (IS_VERCEL && hasMongoUri) {
+            await fetchMongoData();
+          } else {
+            refreshMongoInBackground();
+          }
         }
         return res.json(cachedAdminDb);
       }
@@ -997,7 +1069,7 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
       const mongo = await getMongoDb();
       res.json({
         connected: mongo !== null,
-        uri_configured: !!process.env.MONGODB_URI,
+        uri_configured: Boolean(getRawMongoUri()),
         database: "neonthread_db",
         collection: "Multiple Dedicated Collections (13)",
         error: lastMongoError,
@@ -1185,11 +1257,15 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
       const hasDhaka = order.customer.address.includes('District: Dhaka') || order.customer.address.toLowerCase().includes('dhaka');
       const shippingCharge = hasDhaka ? 70 : 120;
 
+      const formattedOrderId = String(order.id || '').trim().replace(/^NTD-/i, 'TCB-');
+      const finalOrderId = /^TCB-/i.test(formattedOrderId) ? formattedOrderId : `TCB-${formattedOrderId}`;
+      const cleanAddress = String(order.customer.address || '').replace(/\r?\n+/g, ', ').trim();
+
       const invoiceHtml = `
         <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 25px; border: 1px solid #eaeaea; border-radius: 12px; background-color: #fff;">
           <div style="border-bottom: 2px solid #000; padding-bottom: 15px; margin-bottom: 20px; display: table; width: 100%;">
             <div style="display: table-cell; vertical-align: middle;">
-              <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase; color: #000;">NEONTHREAD</h1>
+              <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: -1px; text-transform: uppercase; color: #000;">TRENDY CART BD</h1>
             </div>
             <div style="display: table-cell; text-align: right; vertical-align: middle;">
               <span style="font-size: 14px; color: #888; font-weight: bold;">INVOICE</span>
@@ -1197,16 +1273,17 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
           </div>
 
           <div style="margin-bottom: 20px;">
-            <p style="margin: 3px 0; font-size: 13px; color: #555;"><strong>Order ID:</strong> ${order.id}</p>
+            <p style="margin: 3px 0; font-size: 13px; color: #555;"><strong>Order ID:</strong> ${finalOrderId}</p>
             <p style="margin: 3px 0; font-size: 13px; color: #555;"><strong>Date:</strong> ${new Date(order.date).toLocaleDateString()}</p>
           </div>
 
-          <div style="margin-bottom: 25px; background: #f9f9f9; padding: 15px; border-radius: 8px;">
+          <div style="margin-bottom: 25px; background: #f9f9f9; padding: 15px; border-radius: 8px; word-break: break-word; overflow-wrap: anywhere;">
             <h3 style="margin: 0 0 10px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; color: #999;">Shipping Address</h3>
-            <p style="margin: 3px 0; font-size: 14px; font-weight: bold; color: #111;">${order.customer.name}</p>
-            <p style="margin: 3px 0; font-size: 13px; color: #444;"><strong>Phone:</strong> ${order.customer.phone}</p>
-            <p style="margin: 3px 0; font-size: 13px; color: #444;"><strong>Email:</strong> ${order.customer.email}</p>
-            <p style="margin: 3px 0; font-size: 13px; color: #444;"><strong>Address:</strong> ${order.customer.address}</p>
+            <p style="margin: 4px 0; font-size: 14px; font-weight: bold; color: #111;">${order.customer.name}</p>
+            <p style="margin: 4px 0; font-size: 13px; color: #444;"><strong>Phone:</strong> ${order.customer.phone}</p>
+            <p style="margin: 4px 0; font-size: 13px; color: #444;"><strong>Email:</strong> ${order.customer.email}</p>
+            ${order.customer.district ? `<p style="margin: 4px 0; font-size: 13px; color: #444;"><strong>District:</strong> ${order.customer.district}</p>` : ''}
+            <p style="margin: 4px 0; font-size: 13px; color: #444; line-height: 1.5; word-break: break-word; overflow-wrap: anywhere;"><strong>Address:</strong> ${cleanAddress}</p>
           </div>
 
           <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
@@ -1244,7 +1321,7 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
           </div>
 
           <hr style="border: none; border-top: 1px solid #eaeaea; margin: 30px 0;" />
-          <p style="font-size: 11px; color: #aaa; text-align: center; margin: 0;">Thank you for shopping with NEONTHREAD! This is a system-generated invoice.</p>
+          <p style="font-size: 11px; color: #aaa; text-align: center; margin: 0;">Thank you for shopping with Trendy Cart BD! This is a system-generated invoice.</p>
         </div>
       `;
 
@@ -1259,9 +1336,9 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
 
       // Send the email using Nodemailer
       const mailOptions = {
-        from: `"NEONTHREAD" <${process.env.EMAIL_USER}>`,
+        from: `"TRENDY CART BD" <${process.env.EMAIL_USER}>`,
         to: email,
-        subject: `Your Invoice for Order #${order.id} - NEONTHREAD`,
+        subject: `Your Invoice for Order #${finalOrderId} - TRENDY CART BD`,
         html: invoiceHtml,
       };
 
@@ -1338,11 +1415,16 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
   app.use((req, res, next) => {
     if (viteInstance) {
       viteInstance.middlewares(req, res, next);
-    } else if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+    } else if (process.env.NODE_ENV !== "production" && !IS_VERCEL) {
+      let attempts = 0;
       const checkVite = setInterval(() => {
+        attempts++;
         if (viteInstance) {
           clearInterval(checkVite);
           viteInstance.middlewares(req, res, next);
+        } else if (attempts > 60) {
+          clearInterval(checkVite);
+          next();
         }
       }, 50);
     } else {
@@ -1361,7 +1443,7 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
 
     try {
       // If dist/index.html exists (built production bundle), serve it for SPA routing unless Vite dev middleware is active
-      if (viteInstance && process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+      if (viteInstance && process.env.NODE_ENV !== "production" && !IS_VERCEL) {
         const indexPath = path.join(process.cwd(), "index.html");
         let template = await fs.readFile(indexPath, "utf-8");
         template = await viteInstance.transformIndexHtml(req.originalUrl, template);
@@ -1398,7 +1480,7 @@ const PUBLIC_WRITABLE_KEYS = ["orders", "subscribers", "contactMessages", "revie
     console.error("Uncaught Exception caught safely:", err);
   });
 
-  if (!process.env.VERCEL) {
+  if (!IS_VERCEL) {
     const PORT = Number(process.env.PORT) || 3000;
     const server = app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://0.0.0.0:${PORT}`);

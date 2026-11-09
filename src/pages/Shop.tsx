@@ -12,6 +12,7 @@ export default function Shop() {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
   const activeCategory = searchParams.get('category') || '';
+  const activeSubCategory = searchParams.get('subCategory') || '';
   const [loading, setLoading] = useState(!isDbLoaded);
 
   useEffect(() => {
@@ -31,22 +32,43 @@ export default function Shop() {
     return (categories || []).map(c => c.name);
   }, [categories]);
 
+  const activeCategorySubCategories = useMemo(() => {
+    if (!activeCategory) return [];
+    const matchedCat = (categories || []).find(
+      c => c.name.toLowerCase() === activeCategory.toLowerCase()
+    );
+    const fromCatDef = matchedCat?.subCategories || [];
+    const fromProds = shopProducts
+      .filter(p => (p.category || 'General').toLowerCase() === activeCategory.toLowerCase() && p.subCategory)
+      .map(p => p.subCategory as string);
+    return Array.from(new Set([...fromCatDef, ...fromProds])).filter(Boolean);
+  }, [activeCategory, categories, shopProducts]);
+
   const filteredProducts = useMemo(() => {
     let result = shopProducts;
 
     if (query) {
-      const lowerQuery = query.toLowerCase();
+      const lowerQuery = query.toLowerCase().trim();
       result = result.filter(
         p => p.name.toLowerCase().includes(lowerQuery) || 
              p.description.toLowerCase().includes(lowerQuery) ||
              (p.category && p.category.toLowerCase().includes(lowerQuery)) ||
-             (p.code && p.code.toLowerCase().includes(lowerQuery))
+             (p.subCategory && p.subCategory.toLowerCase().includes(lowerQuery)) ||
+             (p.code && p.code.toLowerCase().includes(lowerQuery)) ||
+             (p.variantCodes && p.variantCodes.some(vc => vc.toLowerCase().includes(lowerQuery))) ||
+             (p.imageVariants && p.imageVariants.some(v => (v.code && v.code.toLowerCase().includes(lowerQuery)) || (v.title && v.title.toLowerCase().includes(lowerQuery))))
       );
     }
 
     if (activeCategory) {
       result = result.filter(
         p => (p.category || 'General').toLowerCase() === activeCategory.toLowerCase()
+      );
+    }
+
+    if (activeSubCategory) {
+      result = result.filter(
+        p => (p.subCategory || '').toLowerCase() === activeSubCategory.toLowerCase()
       );
     }
 
@@ -71,11 +93,12 @@ export default function Shop() {
     } else if (sortBy === 'name-desc') {
       result = [...result].sort((a, b) => b.name.localeCompare(a.name));
     } else {
-      result = [...result].sort((a, b) => (a.serial || 0) - (b.serial || 0));
+      const getSerialRank = (p: { serial?: number }) => (typeof p.serial === 'number' && p.serial > 0 ? p.serial : 999999);
+      result = [...result].sort((a, b) => getSerialRank(a) - getSerialRank(b));
     }
 
     return result;
-  }, [products, query, activeCategory, minPrice, maxPrice, onlyHotSale, sortBy]);
+  }, [products, query, activeCategory, activeSubCategory, minPrice, maxPrice, onlyHotSale, sortBy]);
 
   const selectCategory = (category: string) => {
     const params = new URLSearchParams(searchParams);
@@ -83,6 +106,17 @@ export default function Shop() {
       params.set('category', category);
     } else {
       params.delete('category');
+    }
+    params.delete('subCategory');
+    setSearchParams(params);
+  };
+
+  const selectSubCategory = (subCategory: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (subCategory) {
+      params.set('subCategory', subCategory);
+    } else {
+      params.delete('subCategory');
     }
     setSearchParams(params);
   };
@@ -140,7 +174,7 @@ export default function Shop() {
           <div className="space-y-8">
             <div className="hidden md:flex justify-between items-center mb-2">
                <h3 className="font-bold uppercase tracking-widest text-xs text-gray-900 border-b border-gray-900 pb-1 inline-block">Filters</h3>
-               { (minPrice !== '' || maxPrice !== '' || onlyHotSale || sortBy !== 'none') && 
+               { (minPrice !== '' || maxPrice !== '' || onlyHotSale || sortBy !== 'none' || activeCategory || activeSubCategory) && 
                   <button onClick={clearFilters} className="text-[10px] uppercase font-bold text-gray-500 hover:text-black tracking-widest underline">Clear All</button>
                }
             </div>
@@ -163,7 +197,7 @@ export default function Shop() {
             {/* Categories filter */}
             <div>
               <h4 className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-3">Categories</h4>
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                 <button
                   onClick={() => selectCategory('')}
                   className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-left text-xs font-bold uppercase transition-all ${
@@ -178,19 +212,61 @@ export default function Shop() {
                 {categoriesList.map(cat => {
                   const count = shopProducts.filter(p => (p.category || 'General').toLowerCase() === cat.toLowerCase()).length;
                   const isSel = activeCategory.toLowerCase() === cat.toLowerCase();
+                  const catObj = (categories || []).find(c => c.name.toLowerCase() === cat.toLowerCase());
+                  const subList = Array.from(new Set([
+                    ...(catObj?.subCategories || []),
+                    ...shopProducts.filter(p => (p.category || 'General').toLowerCase() === cat.toLowerCase() && p.subCategory).map(p => p.subCategory as string)
+                  ])).filter(Boolean);
                   return (
-                    <button
-                      key={cat}
-                      onClick={() => selectCategory(cat)}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-left text-xs font-bold uppercase transition-all ${
-                        isSel
-                          ? 'bg-black text-white'
-                          : 'bg-white hover:bg-gray-100 border text-gray-700'
-                      }`}
-                    >
-                      <span className="truncate">{cat}</span>
-                      <span className="text-[10px] opacity-60">({count})</span>
-                    </button>
+                    <div key={cat} className="space-y-1">
+                      <button
+                        onClick={() => selectCategory(cat)}
+                        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-left text-xs font-bold uppercase transition-all ${
+                          isSel
+                            ? 'bg-black text-white'
+                            : 'bg-white hover:bg-gray-100 border text-gray-700'
+                        }`}
+                      >
+                        <span className="truncate">{cat}</span>
+                        <span className="text-[10px] opacity-60">({count})</span>
+                      </button>
+                      {isSel && subList.length > 0 && (
+                        <div className="pl-3 space-y-1 pt-0.5 pb-1 border-l-2 border-gray-200 ml-3">
+                          <button
+                            onClick={() => selectSubCategory('')}
+                            className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left text-[11px] font-bold uppercase transition-all ${
+                              !activeSubCategory
+                                ? 'bg-gray-900 text-white'
+                                : 'bg-gray-50 hover:bg-gray-100 text-gray-600'
+                            }`}
+                          >
+                            <span>All {cat}</span>
+                            <span className="text-[9px] opacity-60">({count})</span>
+                          </button>
+                          {subList.map(sub => {
+                            const subCount = shopProducts.filter(
+                              p => (p.category || 'General').toLowerCase() === cat.toLowerCase() &&
+                                   (p.subCategory || '').toLowerCase() === sub.toLowerCase()
+                            ).length;
+                            const isSubSel = activeSubCategory.toLowerCase() === sub.toLowerCase();
+                            return (
+                              <button
+                                key={sub}
+                                onClick={() => selectSubCategory(sub)}
+                                className={`w-full flex items-center justify-between px-3 py-1.5 rounded-lg text-left text-[11px] font-bold uppercase transition-all ${
+                                  isSubSel
+                                    ? 'bg-gray-900 text-white'
+                                    : 'bg-gray-50 hover:bg-gray-100 text-gray-600'
+                                }`}
+                              >
+                                <span className="truncate">{sub}</span>
+                                <span className="text-[9px] opacity-60">({subCount})</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   );
                 })}
               </div>
@@ -249,62 +325,100 @@ export default function Shop() {
           transition={{ duration: 0.5, delay: 0.2 }}
           className="flex-1 w-full"
         >
-          <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-gray-100 pb-5">
-            <div className="flex flex-col items-start gap-1">
-              <h1 className="text-3xl font-black text-gray-900 tracking-tight uppercase">Our Collection</h1>
-              {query ? (
-                <p className="text-gray-500 text-sm font-medium">
-                  Showing results for <span className="font-bold text-gray-900">"{query}"</span>
-                  <span className="ml-2 text-xs uppercase tracking-widest font-bold">({filteredProducts.length})</span>
-                </p>
-              ) : (
-                <p className="text-gray-500 text-sm font-medium flex items-center gap-2">
-                  Browse our full range of premium collections
-                  <span className="text-[10px] uppercase tracking-widest font-bold bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
-                     {filteredProducts.length} Items
-                  </span>
-                </p>
-              )}
-            </div>
+          <div className="mb-6 border-b border-gray-100 pb-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex flex-col items-start gap-1">
+                <h1 className="text-3xl font-black text-gray-900 tracking-tight uppercase">Our Collection</h1>
+                {query ? (
+                  <p className="text-gray-500 text-sm font-medium">
+                    Showing results for <span className="font-bold text-gray-900">"{query}"</span>
+                    <span className="ml-2 text-xs uppercase tracking-widest font-bold">({filteredProducts.length})</span>
+                  </p>
+                ) : (
+                  <p className="text-gray-500 text-sm font-medium flex items-center gap-2">
+                    Browse our full range of premium collections
+                    <span className="text-[10px] uppercase tracking-widest font-bold bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">
+                       {filteredProducts.length} Items
+                    </span>
+                  </p>
+                )}
+              </div>
 
-            {/* Quick Category Action Pills */}
-            <div className="flex flex-wrap gap-1.5 scrollbar-thin overflow-x-auto py-1">
-              {!isDbLoaded && categoriesList.length === 0 ? (
-                Array(5).fill(0).map((_, idx) => (
-                  <div key={idx} className="h-8 w-20 bg-gray-200 rounded-full animate-pulse" />
-                ))
-              ) : (
-                <>
-                  <button 
-                    onClick={() => selectCategory('')}
-                    className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
-                      !activeCategory 
-                        ? 'bg-black text-white border-black shadow-md' 
-                        : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm'
-                    }`}
-                  >
-                    All
-                  </button>
-                  {categoriesList.map(cat => (
+              {/* Quick Category Action Pills (Only Main Categories next to Our Collection) */}
+              <div className="flex flex-wrap gap-1.5 scrollbar-thin overflow-x-auto py-1">
+                {!isDbLoaded && categoriesList.length === 0 ? (
+                  Array(5).fill(0).map((_, idx) => (
+                    <div key={idx} className="h-8 w-20 bg-gray-200 rounded-full animate-pulse" />
+                  ))
+                ) : (
+                  <>
                     <button 
-                      key={cat}
-                      onClick={() => selectCategory(cat)}
+                      onClick={() => selectCategory('')}
                       className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
-                        activeCategory.toLowerCase() === cat.toLowerCase()
+                        !activeCategory 
                           ? 'bg-black text-white border-black shadow-md' 
                           : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm'
                       }`}
                     >
-                      {cat}
+                      All
                     </button>
-                  ))}
-                </>
-              )}
+                    {categoriesList.map(cat => (
+                      <button 
+                        key={cat}
+                        onClick={() => selectCategory(cat)}
+                        className={`px-4 py-2 rounded-full text-[11px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
+                          activeCategory.toLowerCase() === cat.toLowerCase()
+                            ? 'bg-black text-white border-black shadow-md' 
+                            : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200 shadow-sm'
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </>
+                )}
+              </div>
             </div>
+
+            {/* Sub-Categories Row when a Category is clicked */}
+            {activeCategory && activeCategorySubCategories.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100"
+              >
+                <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 mr-1">
+                  {activeCategory} Sub-Categories:
+                </span>
+                <button
+                  onClick={() => selectSubCategory('')}
+                  className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
+                    !activeSubCategory
+                      ? 'bg-gray-900 text-white border-gray-900 shadow-sm'
+                      : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
+                  }`}
+                >
+                  All {activeCategory}
+                </button>
+                {activeCategorySubCategories.map(sub => (
+                  <button
+                    key={sub}
+                    onClick={() => selectSubCategory(sub)}
+                    className={`px-3.5 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider transition-all whitespace-nowrap border ${
+                      activeSubCategory.toLowerCase() === sub.toLowerCase()
+                        ? 'bg-gray-900 text-white border-gray-900 shadow-sm'
+                        : 'bg-gray-100 hover:bg-gray-200 text-gray-700 border-gray-200'
+                    }`}
+                  >
+                    {sub}
+                  </button>
+                ))}
+              </motion.div>
+            )}
           </div>
 
           {!isDbLoaded ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {Array(8).fill(0).map((_, i) => <ProductCardSkeleton key={i} />)}
             </div>
           ) : filteredProducts.length === 0 ? (
@@ -315,7 +429,7 @@ export default function Shop() {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
               {filteredProducts.map(product => (
                 <ProductCard key={product.id} product={product} />
               ))}

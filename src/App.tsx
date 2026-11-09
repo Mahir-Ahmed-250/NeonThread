@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { lazy, Suspense } from 'react';
+import React, { Component, lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ShopProvider } from './ShopContext';
@@ -22,19 +22,79 @@ import PageLoader from './components/PageLoader';
 import FloatingButtons from './components/FloatingButtons';
 import { useShop } from './ShopContext';
 
-const Home = lazy(() => import('./pages/Home'));
-const Shop = lazy(() => import('./pages/Shop'));
-const Checkout = lazy(() => import('./pages/Checkout'));
-const Contact = lazy(() => import('./pages/Contact'));
-const TrackOrder = lazy(() => import('./pages/TrackOrder'));
-const AdminDashboard = lazy(() => import('./pages/Admin'));
-const ProductDetails = lazy(() => import('./pages/ProductDetails'));
-const FAQ = lazy(() => import('./pages/FAQ'));
-const Policies = lazy(() => import('./pages/Policies'));
-const ShippingPolicy = lazy(() => import('./pages/ShippingPolicy'));
-const PrivacyPolicy = lazy(() => import('./pages/PrivacyPolicy'));
-const Wishlist = lazy(() => import('./pages/Wishlist'));
-const NotFound = lazy(() => import('./pages/NotFound'));
+// Import Home directly so the initial route never fails with a dynamic chunk import error
+import Home from './pages/Home';
+
+// Resilient lazy loader that retries on transient network/chunk failures
+function lazyWithRetry<T extends React.ComponentType<any>>(
+  factory: () => Promise<{ default: T }>,
+  retries = 2
+): React.LazyExoticComponent<T> {
+  return lazy(() =>
+    factory().catch(error => {
+      if (retries > 0) {
+        return new Promise(resolve => setTimeout(resolve, 800)).then(() =>
+          lazyWithRetry(factory, retries - 1)
+        ) as Promise<{ default: T }>;
+      }
+      throw error;
+    })
+  );
+}
+
+const Shop = lazyWithRetry(() => import('./pages/Shop'));
+const Checkout = lazyWithRetry(() => import('./pages/Checkout'));
+const Contact = lazyWithRetry(() => import('./pages/Contact'));
+const TrackOrder = lazyWithRetry(() => import('./pages/TrackOrder'));
+const AdminDashboard = lazyWithRetry(() => import('./pages/Admin'));
+const ProductDetails = lazyWithRetry(() => import('./pages/ProductDetails'));
+const FAQ = lazyWithRetry(() => import('./pages/FAQ'));
+const Policies = lazyWithRetry(() => import('./pages/Policies'));
+const ShippingPolicy = lazyWithRetry(() => import('./pages/ShippingPolicy'));
+const PrivacyPolicy = lazyWithRetry(() => import('./pages/PrivacyPolicy'));
+const Wishlist = lazyWithRetry(() => import('./pages/Wishlist'));
+const NotFound = lazyWithRetry(() => import('./pages/NotFound'));
+
+class ErrorBoundary extends Component<
+  { children: React.ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error: any) {
+    console.warn('App captured error in ErrorBoundary:', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 text-center px-4">
+          <h2 className="text-2xl font-black uppercase text-gray-900 mb-2">Something went wrong</h2>
+          <p className="text-sm text-gray-500 mb-6 max-w-sm">
+            A temporary network or loading error occurred. Please refresh the page to continue.
+          </p>
+          <button
+            onClick={() => {
+              this.setState({ hasError: false });
+              window.location.reload();
+            }}
+            className="px-6 py-2.5 bg-black text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-lg hover:bg-gray-800 transition-all"
+          >
+            Refresh Page
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function RootLayout() {
   return (
@@ -116,7 +176,9 @@ export default function App() {
           <ScrollToTop />
           <PageLoader />
           <PopupAdOverlay />
-          <AnimatedRoutes />
+          <ErrorBoundary>
+            <AnimatedRoutes />
+          </ErrorBoundary>
         </ShopProvider>
       </ToastProvider>
     </BrowserRouter>

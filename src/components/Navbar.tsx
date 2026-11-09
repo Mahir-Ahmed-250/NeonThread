@@ -38,15 +38,28 @@ export default function Navbar() {
 
   const cartItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
+  const getMatchedCode = (p: any, q: string) => {
+    if (!q) return p.code || '';
+    const lower = q.toLowerCase().trim();
+    const matchedVariantObj = p.imageVariants?.find((v: any) => v.code && v.code.toLowerCase().includes(lower));
+    if (matchedVariantObj?.code) return matchedVariantObj.code;
+    const matchedVariantCode = p.variantCodes?.find((vc: string) => vc && vc.toLowerCase().includes(lower));
+    if (matchedVariantCode) return matchedVariantCode;
+    return p.code || '';
+  };
+
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
-    const lower = searchQuery.toLowerCase();
+    const lower = searchQuery.toLowerCase().trim();
     return products.filter(p => 
       p.name.toLowerCase().includes(lower) || 
       p.description.toLowerCase().includes(lower) || 
       (p.category && p.category.toLowerCase().includes(lower)) ||
-      (p.code && p.code.toLowerCase().includes(lower))
-    ).slice(0, 5);
+      (p.subCategory && p.subCategory.toLowerCase().includes(lower)) ||
+      (p.code && p.code.toLowerCase().includes(lower)) ||
+      (p.variantCodes && p.variantCodes.some(vc => vc.toLowerCase().includes(lower))) ||
+      (p.imageVariants && p.imageVariants.some(v => (v.code && v.code.toLowerCase().includes(lower)) || (v.title && v.title.toLowerCase().includes(lower))))
+    ).slice(0, 6);
   }, [searchQuery, products]);
 
   useEffect(() => {
@@ -131,10 +144,12 @@ export default function Navbar() {
     setRecentSearches(recentSearches.filter(s => s !== query));
   };
 
-  const handleProductClick = (productId: string) => {
+  const handleProductClick = (productId: string, matchedCode?: string) => {
     if (searchQuery.trim()) saveRecentSearch(searchQuery);
-    navigate(`/product/${productId}`); 
+    const url = matchedCode ? `/product/${productId}?code=${encodeURIComponent(matchedCode)}` : `/product/${productId}`;
+    navigate(url); 
     setShowDropdown(false);
+    setIsMobileMenuOpen(false);
     setSearchQuery('');
   };
 
@@ -210,21 +225,31 @@ export default function Navbar() {
                           <div className="p-4 text-center text-sm text-gray-500 font-medium dark:text-gray-400">No products found.</div>
                         ) : (
                           <ul className="divide-y divide-gray-50 dark:divide-gray-800">
-                            {searchResults.map(p => (
-                              <li key={p.id}>
-                                <button
-                                  onClick={() => handleProductClick(p.id)}
-                                  className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                                >
-                                  <img src={p.image} alt={p.name} className="w-10 h-10 rounded object-cover bg-gray-100 dark:bg-gray-800 mr-3" />
-                                  <div className="flex-1">
-                                    <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{p.name}</h4>
-                                    <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">৳{p.price}</p>
-                                  </div>
-                                  <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600" />
-                                </button>
-                              </li>
-                            ))}
+                            {searchResults.map(p => {
+                              const displayCode = getMatchedCode(p, searchQuery);
+                              return (
+                                <li key={p.id}>
+                                  <button
+                                    onClick={() => handleProductClick(p.id, displayCode)}
+                                    className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+                                  >
+                                    <img src={p.image} alt={p.name} className="w-10 h-10 rounded object-cover bg-gray-100 dark:bg-gray-800 mr-3" />
+                                    <div className="flex-1 min-w-0">
+                                      <h4 className="text-sm font-bold text-gray-900 dark:text-white truncate">{p.name}</h4>
+                                      <div className="flex items-center gap-2">
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">৳{p.price}</p>
+                                        {displayCode && (
+                                          <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                                            {displayCode}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <ChevronRight className="h-4 w-4 text-gray-300 dark:text-gray-600" />
+                                  </button>
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
                       </div>
@@ -243,8 +268,8 @@ export default function Navbar() {
                         Recent Searches
                       </div>
                       <ul className="divide-y divide-gray-50 dark:divide-gray-800">
-                        {recentSearches.map((s, i) => (
-                          <li key={i}>
+                        {recentSearches.map((s) => (
+                          <li key={s}>
                             <div className="group flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer" onClick={() => handleRecentClick(s)}>
                               <Search className="h-4 w-4 text-gray-400 mr-3" />
                               <span className="flex-1 text-sm text-gray-600 dark:text-gray-300 font-medium">{s}</span>
@@ -370,20 +395,30 @@ export default function Navbar() {
                           <div className="p-4 text-center text-sm text-gray-500 font-medium dark:text-gray-400">No products found.</div>
                         ) : (
                           <ul className="divide-y divide-gray-50 dark:divide-gray-800">
-                            {searchResults.map(p => (
-                              <li key={p.id}>
-                                <button
-                                  onClick={() => handleProductClick(p.id)}
-                                  className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
-                                >
-                                  <img src={p.image} alt={p.name} className="w-8 h-8 rounded object-cover bg-gray-100 mr-3" />
-                                  <div className="flex-1 min-w-0">
-                                    <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{p.name}</h4>
-                                    <p className="text-[10px] text-gray-500 dark:text-gray-400">৳{p.price}</p>
-                                  </div>
-                                </button>
-                              </li>
-                            ))}
+                            {searchResults.map(p => {
+                              const displayCode = getMatchedCode(p, searchQuery);
+                              return (
+                                <li key={p.id}>
+                                  <button
+                                    onClick={() => handleProductClick(p.id, displayCode)}
+                                    className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-left"
+                                  >
+                                    <img src={p.image} alt={p.name} className="w-8 h-8 rounded object-cover bg-gray-100 mr-3" />
+                                    <div className="flex-1 min-w-0">
+                                      <h4 className="text-xs font-bold text-gray-900 dark:text-white truncate">{p.name}</h4>
+                                      <div className="flex items-center gap-1.5">
+                                        <p className="text-[10px] text-gray-500 dark:text-gray-400">৳{p.price}</p>
+                                        {displayCode && (
+                                          <span className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                                            {displayCode}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </button>
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
                       </div>
@@ -391,8 +426,8 @@ export default function Navbar() {
                       <div className="flex-1 overflow-y-auto hide-scrollbar">
                         <div className="px-4 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b dark:border-gray-800">Recent</div>
                         <ul className="divide-y divide-gray-50 dark:divide-gray-800">
-                          {recentSearches.map((s, i) => (
-                            <li key={i}>
+                          {recentSearches.map((s) => (
+                            <li key={s}>
                               <div className="flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors cursor-pointer" onClick={() => handleRecentClick(s)}>
                                 <Search className="h-3 w-3 text-gray-400 mr-3" />
                                 <span className="flex-1 text-xs text-gray-600 dark:text-gray-300 truncate">{s}</span>

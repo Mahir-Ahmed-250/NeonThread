@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Product, Order, Category, Coupon, CartItem, CustomerInfo, Slide, CategoryBanner, LookbookImage, Subscriber, ContactMessage, PopupAd, HomeAd, AdminUser, OTPRecord, Review, ContactInfo, Announcement, FAQItem, PolicyItem, SocialLink } from './types';
 import { generateId } from './lib/utils';
+import { apiUrl } from './lib/api';
 
 interface ShopContextType {
   isDbLoaded: boolean;
@@ -60,6 +61,7 @@ interface ShopContextType {
   deleteLookbookImage: (id: string) => void;
   addProduct: (product: Omit<Product, 'id'>) => void;
   updateProduct: (product: Product) => void;
+  updateProductSerials: (updates: { id: string; serial: number }[]) => void;
   deleteProduct: (id: string) => void;
   addCoupon: (coupon: Omit<Coupon, 'id'>) => void;
   updateCoupon: (coupon: Coupon) => void;
@@ -381,7 +383,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const chunkSize = 5;
         for (let i = 0; i < data.length; i += chunkSize) {
           const chunk = data.slice(i, i + chunkSize);
-          const res = await fetch('/api/db/save', {
+          const res = await fetch(apiUrl('/api/db/save'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ key, data: chunk, token: authToken })
@@ -404,7 +406,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } else {
-        const res = await fetch('/api/db/save', {
+        const res = await fetch(apiUrl('/api/db/save'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ key, data, token: authToken })
@@ -439,7 +441,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const publicAdd = async (key: string, item: any) => {
     try {
-      await fetch('/api/db/public-add', {
+      await fetch(apiUrl('/api/db/public-add'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ key, data: item })
@@ -457,11 +459,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const fetchDb = async () => {
       const controller = new AbortController();
-      const abortTimer = setTimeout(() => controller.abort(), 8000);
+      const abortTimer = setTimeout(() => controller.abort(), 15000);
 
       try {
         let currentToken = authToken;
-        let endpoint = currentToken ? '/api/admin/db' : '/api/db';
+        let endpoint = currentToken ? apiUrl('/api/admin/db') : apiUrl('/api/db');
         let options: RequestInit = currentToken ? {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -483,7 +485,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           localStorage.removeItem('ts_current_admin');
           
           // Retry with public db endpoint
-          endpoint = '/api/db';
+          endpoint = apiUrl('/api/db');
           options = { method: 'GET', signal: controller.signal };
           res = await fetch(endpoint, options);
         }
@@ -535,6 +537,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             if (normalizedDbData.socialLinks) setSocialLinks(normalizedDbData.socialLinks);
             if (normalizedDbData.comparison) setComparisonItems(normalizedDbData.comparison);
             if (normalizedDbData.reviews) setReviews(normalizedDbData.reviews);
+            if (normalizedDbData.contactInfo && typeof normalizedDbData.contactInfo === 'object') {
+              setContactInfo(prev => ({ ...prev, ...normalizedDbData.contactInfo }));
+            }
             if (normalizedDbData.maintenance_mode !== undefined) setIsMaintenanceMode(normalizedDbData.maintenance_mode);
             try {
               if (normalizedDbData.categories) localStorage.setItem('ts_categories', JSON.stringify(normalizedDbData.categories));
@@ -542,6 +547,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
               if (normalizedDbData.categoryBanners) localStorage.setItem('ts_category_banners', JSON.stringify(normalizedDbData.categoryBanners));
               if (normalizedDbData.lookbook) localStorage.setItem('ts_lookbook', JSON.stringify(normalizedDbData.lookbook));
               if (normalizedDbData.homeAds) localStorage.setItem('ts_home_ads', JSON.stringify(normalizedDbData.homeAds));
+              if (normalizedDbData.contactInfo && typeof normalizedDbData.contactInfo === 'object') {
+                localStorage.setItem('ts_contact_info', JSON.stringify(normalizedDbData.contactInfo));
+              }
               if (normalizedDbData.products) {
                 // Save lightweight product list in localStorage so it fits within 5MB browser quota
                 const liteProducts = normalizedDbData.products.map((p: any) => {
@@ -572,10 +580,11 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
                otps,
                announcements,
                socialLinks,
+               contactInfo,
                comparison: comparisonItems,
                maintenance_mode: isMaintenanceMode
              };
-             await fetch('/api/db/init', {
+             await fetch(apiUrl('/api/db/init'), {
                method: 'POST',
                headers: { 'Content-Type': 'application/json' },
                body: JSON.stringify(initialDb)
@@ -752,9 +761,14 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearComparison = () => setComparisonItems([]);
 
   const addReview = (reviewData: Omit<Review, 'id' | 'status' | 'date'>) => {
-    // Validate orderId (case-insensitive and trimmed)
+    // Validate orderId (case-insensitive and trimmed, supporting TCB- and legacy NTD-)
     const submittedId = reviewData.orderId.trim().toUpperCase();
-    const order = orders.find(o => o.id.trim().toUpperCase() === submittedId);
+    const normalizedSubmitted = submittedId.replace(/^NTD-/i, 'TCB-');
+    const order = orders.find(o => {
+      const oid = o.id.trim().toUpperCase();
+      const normalizedOid = oid.replace(/^NTD-/i, 'TCB-');
+      return oid === submittedId || normalizedOid === normalizedSubmitted;
+    });
     if (!order) {
       return { success: false, message: `Invalid Order ID (${submittedId}). Please provide a valid Order ID.` };
     }
@@ -766,13 +780,17 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     // Check if user already reviewed this product with this order
-    const alreadyReviewed = reviews.some(r => r.orderId === reviewData.orderId && r.productId === reviewData.productId && !r.deleted);
+    const alreadyReviewed = reviews.some(r => {
+      const rOid = (r.orderId || '').trim().toUpperCase().replace(/^NTD-/i, 'TCB-');
+      return rOid === normalizedSubmitted && r.productId === reviewData.productId && !r.deleted;
+    });
     if (alreadyReviewed) {
       return { success: false, message: 'You have already submitted a review for this product using this Order ID.' };
     }
 
     const newReview: Review = {
       ...reviewData,
+      orderId: normalizedSubmitted,
       id: generateId(),
       status: 'pending',
       date: new Date().toISOString(),
@@ -810,7 +828,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginAdmin = async (email: string, pass: string) => {
     try {
-      const res = await fetch('/api/auth/login', {
+      const res = await fetch(apiUrl('/api/auth/login'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: pass })
@@ -837,7 +855,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateProfile = async (updates: Partial<AdminUser>) => {
     if (!currentAdmin || !authToken) return { success: false, error: "Not authenticated" };
     try {
-      const res = await fetch('/api/admin/update-profile', {
+      const res = await fetch(apiUrl('/api/admin/update-profile'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: currentAdmin.id, updates, token: authToken })
@@ -872,6 +890,12 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateContactInfo = (info: ContactInfo) => {
     setContactInfo(info);
+    try {
+      localStorage.setItem('ts_contact_info', JSON.stringify(info));
+    } catch (e) {
+      console.warn('Failed to save contact info to local storage', e);
+    }
+    serverSave('contactInfo', info);
   };
 
   const deleteAdmin = (id: string) => {
@@ -915,6 +939,8 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const size = selectedSize || 'M';
     const priceForSize = getProductPriceForSize(product, size);
     const itemImage = product.image || '';
+    const matchedVariant = product.imageVariants?.find(v => v.image === itemImage);
+    const resolvedCode = matchedVariant?.code?.trim() || product.code || '';
     const { images, imageVariants, sizeChartImage, ...liteProduct } = product;
     
     // User requested that same product added multiple times should appear as separate lines in checkout
@@ -937,10 +963,10 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return prev;
         }
         // Add up to stock
-        return [...prev, { ...liteProduct, price: priceForSize, quantity: allowedAdd, selectedSize: size, image: itemImage, cartItemId }];
+        return [...prev, { ...liteProduct, code: resolvedCode, price: priceForSize, quantity: allowedAdd, selectedSize: size, image: itemImage, cartItemId }];
       }
 
-      return [...prev, { ...liteProduct, price: priceForSize, quantity, selectedSize: size, image: itemImage, cartItemId }];
+      return [...prev, { ...liteProduct, code: resolvedCode, price: priceForSize, quantity, selectedSize: size, image: itemImage, cartItemId }];
     });
   };
 
@@ -1071,7 +1097,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }
 
-    const newOrderId = `NTD-${Date.now()}${(Math.random() * 1000).toFixed(0)}`;
+    const newOrderId = `TCB-${Date.now()}${(Math.random() * 1000).toFixed(0)}`;
 
     const newOrder: Order = {
       id: newOrderId,
@@ -1141,6 +1167,22 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // Admin
+  const normalizeVariantsWithCodes = (baseCode: string, variants?: Product['imageVariants']) => {
+    if (!variants || variants.length === 0) return { imageVariants: variants, variantCodes: [] as string[] };
+    const firstCustomCode = variants[0]?.code?.trim().toUpperCase();
+    const rootBase = (firstCustomCode ? firstCustomCode.replace(/-\d+$/, '') : baseCode) || baseCode;
+    const updatedVariants = variants.map((v, idx) => {
+      const customCode = v.code && v.code.trim() ? v.code.trim().toUpperCase() : '';
+      const resolvedVariantCode = customCode || `${rootBase}-${idx + 1}`;
+      return {
+        ...v,
+        code: resolvedVariantCode
+      };
+    });
+    const variantCodes = Array.from(new Set(updatedVariants.map(v => v.code).filter(Boolean))) as string[];
+    return { imageVariants: updatedVariants, variantCodes };
+  };
+
   const addProduct = (product: Omit<Product, 'id'>) => {
     // Generate sequential code if none provided
     let code = product.code && product.code.trim() 
@@ -1156,8 +1198,20 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const maxNum = tyCodes.length > 0 ? Math.max(...tyCodes) : 1000;
       code = `TY-${maxNum + 1}`;
     }
+
+    const { imageVariants, variantCodes } = normalizeVariantsWithCodes(code, product.imageVariants);
+    const sameGroup = products.filter(p => !p.deleted && Boolean(p.isCollection) === Boolean(product.isCollection));
+    const maxSerial = sameGroup.reduce((max, p) => Math.max(max, p.serial || 0), 0);
+    const resolvedSerial = product.serial && product.serial > 0 ? product.serial : maxSerial + 1;
     
-    setProducts(prev => [{ ...product, code, id: generateId() }, ...prev]);
+    setProducts(prev => [{
+      ...product,
+      code,
+      serial: resolvedSerial,
+      imageVariants,
+      variantCodes: variantCodes.length > 0 ? variantCodes : product.variantCodes,
+      id: generateId()
+    }, ...prev]);
   };
 
   const updateProduct = (product: Product) => {
@@ -1175,8 +1229,26 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const maxNum = tyCodes.length > 0 ? Math.max(...tyCodes) : 1000;
       code = `TY-${maxNum + 1}`;
     }
+
+    const { imageVariants, variantCodes } = normalizeVariantsWithCodes(code, product.imageVariants);
     
-    setProducts(prev => prev.map(p => p.id === product.id ? { ...product, code } : p));
+    setProducts(prev => prev.map(p => p.id === product.id ? {
+      ...product,
+      code,
+      imageVariants,
+      variantCodes: variantCodes.length > 0 ? variantCodes : (product.variantCodes || p.variantCodes)
+    } : p));
+  };
+
+  const updateProductSerials = (updates: { id: string; serial: number }[]) => {
+    if (!updates || updates.length === 0) return;
+    const serialMap = new Map(updates.map(u => [u.id, u.serial]));
+    setProducts(prev => prev.map(p => {
+      if (serialMap.has(p.id)) {
+        return { ...p, serial: serialMap.get(p.id)! };
+      }
+      return p;
+    }));
   };
 
   const deleteProduct = (id: string) => {
@@ -1445,9 +1517,9 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   useEffect(() => {
-    // Keep-alive ping every 3 minutes to keep Render web service active and prevent cold start white screen
+    // Keep-alive ping every 3 minutes to keep Render/Railway web service active and prevent cold start
     const keepAliveTimer = setInterval(() => {
-      fetch('/api/ping').catch(() => {});
+      fetch(apiUrl('/api/ping')).catch(() => {});
     }, 3 * 60 * 1000);
 
     return () => clearInterval(keepAliveTimer);
@@ -1481,7 +1553,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       getProductPriceForSize,
       getProductStockForSize,
       addToCart, removeFromCart, removeFromCartById, updateCartQuantity, updateCartQuantityById, updateCartItemSize, updateCartItemSizeById, clearCart, placeOrder,
-      loginAdmin, logoutAdmin, updateProfile, addAdmin, updateAdmin, deleteAdmin, updateContactInfo, addProduct, updateProduct, deleteProduct,
+      loginAdmin, logoutAdmin, updateProfile, addAdmin, updateAdmin, deleteAdmin, updateContactInfo, addProduct, updateProduct, updateProductSerials, deleteProduct,
       addSlide, updateSlide, deleteSlide, addCategoryBanner, updateCategoryBanner, deleteCategoryBanner, 
       addCategory, updateCategory, deleteCategory,
       addLookbookImage, updateLookbookImage, updateLookbookList, deleteLookbookImage,
